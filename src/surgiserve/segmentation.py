@@ -1,6 +1,6 @@
-"""Segmentation models the worker can run.
+"""The interface the worker runs models through, and a fake model.
 
-Only a fake one exists until Milestone 3 brings in the surgiseg-ml network.
+The real one, surgiseg-ml's network, is in ``surgiseg_model.py``.
 """
 
 import time
@@ -21,7 +21,7 @@ class SegmentationModel(Protocol):
 class FakeModel:
     """Stands in for the network: marks bright pixels as "instrument".
 
-    It exists to exercise the queue, worker and storage end to end. Its
+    It exercises the queue, worker and storage without model weights. Its
     output means nothing about instruments.
     """
 

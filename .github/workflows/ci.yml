@@ -45,6 +45,8 @@ jobs:
           python-version: "3.12"
           cache: pip
 
+      # CPU-only PyTorch first; from PyPI, x86 Linux would get the CUDA build.
+      - run: python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.13.0
       - run: python -m pip install -e '.[dev]'
 
       - name: ruff
@@ -67,8 +69,22 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # The real checkpoint is not in the repository. A random one with the
+      # same architecture, made inside the built image, lets the worker run
+      # the real inference code; the hashes are passed to it through the
+      # environment. Its masks are meaningless; the pipeline is what's tested.
+      - name: random weights
+        run: |
+          docker compose build
+          mkdir -p weights && chmod 777 weights
+          hashes="$(docker compose run --rm --no-deps -v "$PWD/weights:/out" \
+            worker python -m surgiserve.random_checkpoint /out)"
+          echo "$hashes"
+          echo "SURGISERVE_MODEL_CHECKPOINT_SHA256=$(jq -r .checkpoint_sha256 <<<"$hashes")" >> "$GITHUB_ENV"
+          echo "SURGISERVE_MODEL_CONFIG_SHA256=$(jq -r .config_sha256 <<<"$hashes")" >> "$GITHUB_ENV"
+
       - name: compose up
-        run: docker compose up --build --detach --wait
+        run: docker compose up --detach --wait
 
       - name: smoke test over HTTP
         run: ./scripts/smoke.sh

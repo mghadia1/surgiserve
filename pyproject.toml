@@ -11,12 +11,19 @@ license = "MIT"
 dependencies = [
   "alembic>=1.20",
   "fastapi>=0.142",
+  "numpy>=2.5",
   "pillow>=12.3",
   "psycopg[binary]>=3.3",
   "pydantic-settings>=2.15",
   "python-multipart>=0.0.32",
   "redis>=8.1",
   "sqlalchemy>=2.1",
+  # The network and its config class come from surgiseg-ml itself, pinned to
+  # the commit that matches the frozen run, rather than copied here.
+  "surgiseg-ml @ https://github.com/mghadia1/surgiseg-ml/archive/cf7a02eef6148676b98d1c687c824060104311fa.zip",
+  # The version the frozen benchmark was produced with. Install the CPU build
+  # first (see the Dockerfile and CI); plain pip on x86 pulls the CUDA one.
+  "torch==2.13.0",
   "uvicorn>=0.54",
 ]
 
@@ -48,3 +55,8 @@ select = ["E", "F", "I", "B", "UP"]
 [tool.mypy]
 strict = true
 files = ["src", "tests", "migrations"]
+
+# surgiseg-ml ships no type information.
+[[tool.mypy.overrides]]
+module = ["surgiseg", "surgiseg.*"]
+ignore_missing_imports = true

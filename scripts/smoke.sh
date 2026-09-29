@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # End-to-end check against a running Compose stack, over real HTTP:
-# health, upload an image, wait for the worker to finish the job, and confirm
-# the upload and the mask are on the storage volume inside the container.
+# health, upload an image, wait for the worker to finish the job, download the
+# mask and check it is a PNG the size of the upload, and confirm both files
+# are on the storage volume inside the container.
 set -euo pipefail
 
 base_url="${BASE_URL:-http://localhost:8000}"
@@ -49,6 +50,22 @@ print(f"/data/storage/inputs/{fetched['id']}.{extension}")
 print(f"/data/storage/masks/{fetched['id']}.png")
 PY
 )"
+
+mask_url="$(python3 -c 'import json, sys; print(json.load(sys.stdin)["mask_url"])' <<<"$fetched")"
+echo "GET $mask_url"
+mask="$(mktemp)"
+trap 'rm -f "$headers" "$mask"' EXIT
+curl --fail --silent --show-error --output "$mask" "$base_url$mask_url"
+python3 - "$mask" "$fetched" <<'PY'
+import json, struct, sys
+data = open(sys.argv[1], "rb").read()
+job = json.loads(sys.argv[2])
+assert data[:8] == b"\x89PNG\r\n\x1a\n", "the mask is not a PNG"
+width, height = struct.unpack(">II", data[16:24])  # from the IHDR chunk
+expected = (job["input"]["width"], job["input"]["height"])
+assert (width, height) == expected, f"mask is {width}x{height}, upload {expected}"
+print(f"mask: PNG {width}x{height}, {len(data)} bytes, model {job['model']}")
+PY
 
 for path in $paths; do
   echo "on the volume: $path"

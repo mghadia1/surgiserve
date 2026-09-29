@@ -2,6 +2,7 @@ import io
 import threading
 import time
 import uuid
+from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
@@ -9,10 +10,12 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from redis import Redis
 
+from surgiserve import random_checkpoint
 from surgiserve.job_queue import QUEUE_KEY, JobQueue
 from surgiserve.segmentation import FakeModel, SegmentationModel
 from surgiserve.settings import Settings
-from surgiserve.worker import MAX_ERROR_LENGTH, Outcome, Worker
+from surgiserve.surgiseg_model import ChecksumMismatch
+from surgiserve.worker import MAX_ERROR_LENGTH, Outcome, Worker, build_model
 
 WORKER_ID = "test-worker"
 
@@ -206,3 +209,47 @@ def test_run_processes_jobs_until_told_to_stop(
 
     assert statuses == {"succeeded"}
     assert not thread.is_alive()
+
+
+def test_worker_runs_the_real_network_end_to_end(
+    client: TestClient, app: FastAPI, settings: Settings, tmp_path: Path
+) -> None:
+    # Random weights with the frozen architecture: the masks are meaningless,
+    # but loading, preprocessing, TTA, resizing and saving are all the real
+    # code path.
+    hashes = random_checkpoint.write(tmp_path / "weights")
+    real = settings.model_copy(
+        update={
+            "model": "surgiseg",
+            "model_checkpoint_path": tmp_path / "weights" / "best-model.pt",
+            "model_config_path": tmp_path / "weights" / "config.json",
+            "model_checkpoint_sha256": hashes["checkpoint_sha256"],
+            "model_config_sha256": hashes["config_sha256"],
+        }
+    )
+    job_id = submit(client)
+
+    outcome = make_worker(app, settings, build_model(real)).run_once()
+
+    assert outcome == Outcome.SUCCEEDED
+    job = client.get(f"/jobs/{job_id}").json()
+    assert job["model"] == f"surgiseg-resnet18-unet@{hashes['checkpoint_sha256'][:12]}"
+    with Image.open(settings.storage_dir / "masks" / f"{job_id}.png") as mask:
+        assert (mask.mode, mask.size) == ("L", (64, 48))
+        assert set(mask.get_flattened_data()) <= {0, 255}
+
+
+def test_worker_will_not_build_a_model_from_unverified_weights(
+    settings: Settings, tmp_path: Path
+) -> None:
+    random_checkpoint.write(tmp_path / "weights")
+    wrong = settings.model_copy(
+        update={
+            "model": "surgiseg",
+            "model_checkpoint_path": tmp_path / "weights" / "best-model.pt",
+            "model_config_path": tmp_path / "weights" / "config.json",
+        }
+    )  # the default hashes are the real checkpoint's, not these files'
+
+    with pytest.raises(ChecksumMismatch):
+        build_model(wrong)

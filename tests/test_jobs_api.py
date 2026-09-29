@@ -186,6 +186,59 @@ def test_queue_outage_undoes_the_job_and_returns_503(
     assert stored_files(settings) == []
 
 
+def finish_with_fake_model(app: FastAPI, settings: Settings) -> None:
+    from surgiserve.segmentation import FakeModel
+    from surgiserve.worker import Worker
+
+    Worker(
+        queue=app.state.queue,
+        session_factory=app.state.session_factory,
+        storage_dir=settings.storage_dir,
+        model=FakeModel(),
+        worker_id="api-test",
+        poll_seconds=0.1,
+    ).run_once()
+
+
+def test_mask_is_downloadable_once_the_job_succeeds(
+    client: TestClient, app: FastAPI, settings: Settings
+) -> None:
+    created = client.post(
+        "/jobs", files={"image": ("frame.png", solid(), "image/png")}
+    ).json()
+    assert created["mask_url"] is None
+    assert client.get(f"/jobs/{created['id']}/mask").status_code == 409
+
+    finish_with_fake_model(app, settings)
+
+    job = client.get(f"/jobs/{created['id']}").json()
+    assert job["mask_url"] == f"/jobs/{created['id']}/mask"
+    response = client.get(job["mask_url"])
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    stored = settings.storage_dir / "masks" / f"{created['id']}.png"
+    assert response.content == stored.read_bytes()
+
+
+def test_a_failed_job_has_no_mask(
+    client: TestClient, app: FastAPI, settings: Settings
+) -> None:
+    job_id = client.post(
+        "/jobs", files={"image": ("frame.png", solid(), "image/png")}
+    ).json()["id"]
+    (settings.storage_dir / "inputs" / f"{job_id}.png").unlink()
+    finish_with_fake_model(app, settings)  # fails: the input is gone
+
+    response = client.get(f"/jobs/{job_id}/mask")
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "job is failed; it has no mask"}
+
+
+def test_mask_of_an_unknown_job_is_404(client: TestClient) -> None:
+    assert client.get(f"/jobs/{uuid.uuid4()}/mask").status_code == 404
+
+
 def test_unknown_job_is_404(client: TestClient) -> None:
     response = client.get(f"/jobs/{uuid.uuid4()}")
 

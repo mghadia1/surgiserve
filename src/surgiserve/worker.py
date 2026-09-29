@@ -175,7 +175,22 @@ class Worker:
 
 
 def build_model(settings: Settings) -> SegmentationModel:
-    return FakeModel(delay_seconds=settings.fake_model_delay_seconds)
+    if settings.model == "fake":
+        return FakeModel(delay_seconds=settings.fake_model_delay_seconds)
+    # Imported here so the API process, which never runs the model, does not
+    # load torch.
+    from .surgiseg_model import SurgisegModel
+
+    # Raises if either file's hash is wrong: better not to start than to
+    # serve masks from weights nobody evaluated.
+    return SurgisegModel.load(
+        settings.model_checkpoint_path,
+        settings.model_config_path,
+        checkpoint_sha256=settings.model_checkpoint_sha256,
+        config_sha256=settings.model_config_sha256,
+        threshold=settings.model_threshold,
+        flip_tta=settings.model_flip_tta,
+    )
 
 
 def main() -> None:

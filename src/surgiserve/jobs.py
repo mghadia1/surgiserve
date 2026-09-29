@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from redis.exceptions import RedisError
 from sqlalchemy.orm import Session
@@ -58,6 +59,8 @@ class JobOut(BaseModel):
     finished_at: datetime | None
     model: str | None
     error: str | None
+    # Where to download the mask; set once the job has succeeded.
+    mask_url: str | None
     input: JobInput
 
     @classmethod
@@ -71,6 +74,7 @@ class JobOut(BaseModel):
             finished_at=job.finished_at,
             model=job.model_name,
             error=job.error,
+            mask_url=f"/jobs/{job.id}/mask" if job.result_path else None,
             input=JobInput(
                 filename=job.original_filename,
                 format=job.image_format,
@@ -158,6 +162,35 @@ def get_job(job_id: uuid.UUID, session: SessionDep) -> JobOut:
     if job is None:
         raise HTTPException(404, "job not found")
     return JobOut.from_job(job)
+
+
+@router.get(
+    "/jobs/{job_id}/mask",
+    response_class=FileResponse,
+    responses={
+        200: {"content": {"image/png": {}}, "description": "The mask as a PNG"},
+        404: {"description": "No such job"},
+        409: {"description": "The job has no mask (not finished, or failed)"},
+    },
+)
+def get_mask(
+    job_id: uuid.UUID, session: SessionDep, settings: SettingsDep
+) -> FileResponse:
+    """The job's mask: a grayscale PNG the size of the upload, 255 where the
+    model found instrument and 0 elsewhere."""
+
+    job = session.get(Job, job_id)
+    if job is None:
+        raise HTTPException(404, "job not found")
+    if job.status is not JobStatus.SUCCEEDED or job.result_path is None:
+        raise HTTPException(409, f"job is {job.status}; it has no mask")
+    storage = settings.storage_dir.resolve()
+    path = (storage / job.result_path).resolve()
+    # result_path is written by the worker, never by a client; this check is
+    # a second line of defence against serving anything outside storage.
+    if not path.is_relative_to(storage):
+        raise HTTPException(500, "mask path is outside storage")
+    return FileResponse(path, media_type="image/png", filename=f"{job_id}-mask.png")
 
 
 def too_large_detail(limit: int) -> str:

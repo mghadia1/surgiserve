@@ -6,6 +6,11 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# CPU-only PyTorch, in its own layer so code changes do not re-download it.
+# From PyPI, x86 Linux would get the multi-GB CUDA build instead.
+RUN python -m pip install --no-cache-dir \
+    --index-url https://download.pytorch.org/whl/cpu torch==2.13.0
+
 COPY pyproject.toml README.md ./
 COPY src ./src
 RUN python -m pip install --no-cache-dir .

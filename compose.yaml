@@ -72,11 +72,19 @@ services:
       SURGISERVE_DATABASE_URL: *database-url
       SURGISERVE_REDIS_URL: *redis-url
       SURGISERVE_STORAGE_DIR: /data/storage
-      SURGISERVE_MODEL: fake
-      SURGISERVE_FAKE_MODEL_DELAY_SECONDS: "0.2"
-    # Same volume as the API: the worker reads uploads and writes masks there.
+      # The real network by default; SURGISERVE_MODEL=fake runs without weights.
+      SURGISERVE_MODEL: ${SURGISERVE_MODEL:-surgiseg}
+      SURGISERVE_MODEL_CHECKPOINT_PATH: /weights/best-model.pt
+      SURGISERVE_MODEL_CONFIG_PATH: /weights/config.json
+      # Passed through only if set in the shell. Unset, the worker expects the
+      # frozen run's hashes; CI sets them for its random test weights.
+      SURGISERVE_MODEL_CHECKPOINT_SHA256:
+      SURGISERVE_MODEL_CONFIG_SHA256:
     volumes:
+      # Same volume as the API: the worker reads uploads and writes masks there.
       - storage:/data/storage
+      # Weights stay outside the image and the repository (`make weights`).
+      - ./weights:/weights:ro
     depends_on:
       migrate:
         condition: service_completed_successfully
