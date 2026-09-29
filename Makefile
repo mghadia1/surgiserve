@@ -2,11 +2,12 @@ PYTHON ?= python3.12
 VENV := .venv
 BIN := $(VENV)/bin
 
-.PHONY: install lint format typecheck db-up test migrate check up down reset smoke clean
+.PHONY: install lint format typecheck services-up test migrate check up down reset smoke clean
 
-# The Compose database as published on the host, with a separate database for
-# tests so they never touch development data.
+# The Compose services as published on the host, with a separate database
+# and Redis database number for tests, so they never touch development data.
 TEST_DATABASE_URL ?= postgresql+psycopg://surgiserve:surgiserve@localhost:5433/surgiserve_test
+TEST_REDIS_URL ?= redis://localhost:6380/15
 
 $(BIN)/python:
 	$(PYTHON) -m venv $(VENV)
@@ -25,14 +26,16 @@ format:
 typecheck:
 	$(BIN)/mypy
 
-db-up:
-	docker compose up --detach --wait db
+services-up:
+	docker compose up --detach --wait db redis
 
-test: db-up
-	SURGISERVE_TEST_DATABASE_URL=$(TEST_DATABASE_URL) $(BIN)/python -m pytest -q
+test: services-up
+	SURGISERVE_TEST_DATABASE_URL=$(TEST_DATABASE_URL) \
+	SURGISERVE_TEST_REDIS_URL=$(TEST_REDIS_URL) \
+	$(BIN)/python -m pytest -q
 
 # Apply migrations to the development database from the host.
-migrate: db-up
+migrate: services-up
 	$(BIN)/alembic upgrade head
 
 # Everything CI runs before the Docker job.

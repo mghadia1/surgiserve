@@ -7,6 +7,7 @@ from alembic import command
 from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from redis import Redis
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 
@@ -15,6 +16,19 @@ from surgiserve.settings import Settings
 
 ROOT = Path(__file__).resolve().parents[1]
 TEST_DATABASE_URL_ENV = "SURGISERVE_TEST_DATABASE_URL"
+TEST_REDIS_URL_ENV = "SURGISERVE_TEST_REDIS_URL"
+
+
+def required_service_url(variable: str, how: str) -> str:
+    """Read a test service URL. Tests that need it skip without it, except in
+    CI, where a missing service is a configuration error."""
+
+    url = os.environ.get(variable)
+    if not url:
+        if os.environ.get("CI"):
+            pytest.fail(f"{variable} must be set in CI")
+        pytest.skip(f"{variable} not set; {how}")
+    return url
 
 
 def alembic_config(url: str) -> Config:
@@ -41,22 +55,28 @@ def ensure_database(url: str) -> None:
 
 @pytest.fixture(scope="session")
 def database_url() -> str:
-    """A migrated, dedicated test database. Tests that need it skip without it,
-    except in CI, where a missing database is a configuration error."""
+    """A migrated, dedicated test database."""
 
-    url = os.environ.get(TEST_DATABASE_URL_ENV)
-    if not url:
-        if os.environ.get("CI"):
-            pytest.fail(f"{TEST_DATABASE_URL_ENV} must be set in CI")
-        pytest.skip(f"{TEST_DATABASE_URL_ENV} not set; `make test` starts a database")
+    url = required_service_url(TEST_DATABASE_URL_ENV, "`make test` starts a database")
     ensure_database(url)
     command.upgrade(alembic_config(url), "head")
     return url
 
 
+@pytest.fixture(scope="session")
+def redis_url() -> str:
+    """A Redis database number set aside for tests; emptied before each test."""
+
+    return required_service_url(TEST_REDIS_URL_ENV, "`make test` starts Redis")
+
+
 @pytest.fixture
-def settings(tmp_path: Path, database_url: str) -> Settings:
-    return Settings(database_url=database_url, storage_dir=tmp_path / "storage")
+def settings(tmp_path: Path, database_url: str, redis_url: str) -> Settings:
+    return Settings(
+        database_url=database_url,
+        redis_url=redis_url,
+        storage_dir=tmp_path / "storage",
+    )
 
 
 @pytest.fixture
@@ -64,7 +84,10 @@ def app(settings: Settings) -> Iterator[FastAPI]:
     app = create_app(settings)
     with app.state.engine.begin() as connection:
         connection.execute(text("TRUNCATE jobs"))
+    redis: Redis = app.state.redis
+    redis.flushdb()
     yield app
+    redis.close()
     app.state.engine.dispose()
 
 

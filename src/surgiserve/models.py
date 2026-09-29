@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import CheckConstraint, DateTime, Enum, MetaData, String, func
+from sqlalchemy import CheckConstraint, DateTime, Enum, MetaData, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 # Deterministic constraint names, so migrations can refer to them by name.
@@ -22,8 +22,10 @@ class Base(DeclarativeBase):
 
 
 class JobStatus(StrEnum):
-    """The job lifecycle. In Milestone 1 nothing moves a job past ``queued``;
-    the worker that does arrives in Milestone 2."""
+    """The job lifecycle: queued -> running -> succeeded | failed.
+
+    Every transition is a conditional UPDATE on the current status, so a job
+    id delivered twice cannot run twice."""
 
     QUEUED = "queued"
     RUNNING = "running"
@@ -62,6 +64,15 @@ class Job(Base):
     height: Mapped[int]
     size_bytes: Mapped[int]
     sha256: Mapped[str] = mapped_column(String(64))
+
+    # Filled in by the worker.
+    model_name: Mapped[str | None] = mapped_column(String(64))
+    # Mask path relative to the storage directory; set only on success.
+    result_path: Mapped[str | None] = mapped_column(String(255))
+    # Why the job failed; set only on failure.
+    error: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

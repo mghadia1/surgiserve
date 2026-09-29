@@ -1,8 +1,8 @@
 """HTTP API.
 
 ``/health`` is a liveness check only: it says the process is up and serving
-requests, and deliberately does not touch the database. The deep check that
-also verifies Postgres, Redis and the model arrives in Milestone 5.
+requests, and deliberately does not touch the database or Redis. The deep
+check that also verifies Postgres, Redis and the model arrives in Milestone 5.
 """
 
 from typing import Literal
@@ -10,11 +10,13 @@ from typing import Literal
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from redis import Redis
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from . import __version__
+from .job_queue import JobQueue
 from .jobs import router as jobs_router
 from .jobs import too_large_detail
 from .settings import Settings
@@ -74,6 +76,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.engine = engine
     app.state.session_factory = sessionmaker(engine, expire_on_commit=False)
+    # Like the engine, the Redis client connects on first use.
+    app.state.redis = Redis.from_url(settings.redis_url, decode_responses=True)
+    app.state.queue = JobQueue(app.state.redis)
 
     app.add_middleware(
         ContentLengthLimit,

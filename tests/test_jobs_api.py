@@ -7,6 +7,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from imaging import noise, solid
+from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -165,6 +166,23 @@ def test_database_failure_removes_the_stored_file(
     )
 
     assert response.status_code == 500
+    assert stored_files(settings) == []
+
+
+def test_queue_outage_undoes_the_job_and_returns_503(
+    app: FastAPI, settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def redis_down(_job_id: uuid.UUID) -> None:
+        raise RedisConnectionError("redis went away")
+
+    monkeypatch.setattr(app.state.queue, "enqueue", redis_down)
+
+    response = TestClient(app).post(
+        "/jobs", files={"image": ("frame.png", solid(), "image/png")}
+    )
+
+    assert response.status_code == 503
+    assert job_count(app) == 0
     assert stored_files(settings) == []
 
 

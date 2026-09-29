@@ -1,8 +1,8 @@
-# Milestone 1: Postgres, a one-shot migration step, and the API.
-# Redis and the worker arrive in Milestone 2.
+# Postgres, Redis, a one-shot migration step, the API and a worker.
 
 # Development-only credentials. Nothing here is meant for a shared deployment.
 x-database-url: &database-url postgresql+psycopg://surgiserve:surgiserve@db:5432/surgiserve
+x-redis-url: &redis-url redis://redis:6379/0
 
 services:
   db:
@@ -23,8 +23,22 @@ services:
       timeout: 3s
       retries: 30
 
-  # Runs `alembic upgrade head` once and exits. The API starts only after it
-  # has exited successfully, so the API never sees an unmigrated schema.
+  redis:
+    image: redis:8-alpine
+    # Append-only file: queued job ids survive a Redis restart.
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:6380:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Runs `alembic upgrade head` once and exits. The API and worker start only
+  # after it has exited successfully, so neither sees an unmigrated schema.
   migrate:
     build: .
     command: ["alembic", "upgrade", "head"]
@@ -40,14 +54,40 @@ services:
       - "8000:8000"
     environment:
       SURGISERVE_DATABASE_URL: *database-url
+      SURGISERVE_REDIS_URL: *redis-url
       SURGISERVE_STORAGE_DIR: /data/storage
     volumes:
       - storage:/data/storage
     depends_on:
       migrate:
         condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build: .
+    command: ["python", "-m", "surgiserve.worker"]
+    environment:
+      SURGISERVE_DATABASE_URL: *database-url
+      SURGISERVE_REDIS_URL: *redis-url
+      SURGISERVE_STORAGE_DIR: /data/storage
+      SURGISERVE_MODEL: fake
+      SURGISERVE_FAKE_MODEL_DELAY_SECONDS: "0.2"
+    # Same volume as the API: the worker reads uploads and writes masks there.
+    volumes:
+      - storage:/data/storage
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    # The API's HTTP health check does not apply to a worker.
+    healthcheck:
+      disable: true
     restart: unless-stopped
 
 volumes:
   pgdata:
+  redisdata:
   storage:

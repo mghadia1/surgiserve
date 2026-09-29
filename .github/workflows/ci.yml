@@ -23,10 +23,20 @@ jobs:
           --health-interval 2s
           --health-timeout 3s
           --health-retries 30
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
     env:
-      # The tests create this database and migrate it themselves. Without this
-      # variable the database tests would fail here (in CI) rather than skip.
+      # The tests create this database and migrate it themselves. Without these
+      # variables the service tests would fail here (in CI) rather than skip.
       SURGISERVE_TEST_DATABASE_URL: postgresql+psycopg://surgiserve:surgiserve@localhost:5432/surgiserve_test
+      SURGISERVE_TEST_REDIS_URL: redis://localhost:6379/15
     steps:
       - uses: actions/checkout@v6
 
@@ -51,7 +61,8 @@ jobs:
   compose:
     # The tests exercise the app in-process; this exercises the images the
     # way a user runs them: built by Compose, migrated by the one-shot
-    # migrate service, and reached over the network.
+    # migrate service, reached over the network, with a real worker
+    # processing the job.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
