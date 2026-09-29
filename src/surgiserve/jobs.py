@@ -58,6 +58,9 @@ class JobOut(BaseModel):
     started_at: datetime | None
     finished_at: datetime | None
     model: str | None
+    # Starts so far, counting ones cut short by a worker dying.
+    attempts: int
+    # Why the last attempt failed; kept while a retry is pending.
     error: str | None
     # Where to download the mask; set once the job has succeeded.
     mask_url: str | None
@@ -73,6 +76,7 @@ class JobOut(BaseModel):
             started_at=job.started_at,
             finished_at=job.finished_at,
             model=job.model_name,
+            attempts=job.attempts,
             error=job.error,
             mask_url=f"/jobs/{job.id}/mask" if job.result_path else None,
             input=JobInput(

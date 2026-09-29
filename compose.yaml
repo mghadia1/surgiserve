@@ -80,6 +80,10 @@ services:
       # frozen run's hashes; CI sets them for its random test weights.
       SURGISERVE_MODEL_CHECKPOINT_SHA256:
       SURGISERVE_MODEL_CONFIG_SHA256:
+      # Knobs for failure testing, also passed through only if set.
+      SURGISERVE_FAKE_MODEL_DELAY_SECONDS:
+      SURGISERVE_JOB_TIMEOUT_SECONDS:
+      SURGISERVE_MAX_ATTEMPTS:
     volumes:
       # Same volume as the API: the worker reads uploads and writes masks there.
       - storage:/data/storage

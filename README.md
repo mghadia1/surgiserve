@@ -20,7 +20,7 @@ queue, a database, workers, failure handling and load testing.
 | 1 | Postgres and Alembic, `POST /jobs`, `GET /jobs/{id}`, input validation | Built; waiting on CI |
 | 2 | Redis queue and a worker running a fake model, end to end | Built; waiting on CI |
 | 3 | Real inference with the surgiseg-ml checkpoint, masks and result links | Built; waiting on CI |
-| 4 | Retries with backoff, timeouts, dead-letter queue, worker crash recovery | Not started |
+| 4 | Retries with backoff, timeouts, dead-letter queue, worker crash recovery | Built; waiting on CI |
 | 5 | Structured JSON logs and a deep `/health` check | Not started |
 | 6 | Locust load test with 1, 2 and 4 workers | Not started |
 | 7 | Architecture diagram, design decisions, benchmarks | Not started |
@@ -61,7 +61,9 @@ remains for running without weights.
 
 To run with the real weights, copy them from a local surgiseg-ml checkout
 (`make weights`, which reads `SURGISEG_RUN_DIR`). `SURGISERVE_MODEL=fake`
-runs without them.
+runs without them; with `SURGISERVE_FAKE_MODEL_DELAY_SECONDS`,
+`SURGISERVE_JOB_TIMEOUT_SECONDS` and `SURGISERVE_MAX_ATTEMPTS` it is how the
+failure paths above were exercised.
 
 ## How a job flows
 
@@ -69,32 +71,77 @@ runs without them.
    Postgres, then pushes the job id onto a Redis list.
 2. A worker claims the id with `BLMOVE`, which atomically moves it from the
    queue to that worker's own processing list.
-3. The worker flips the row from `queued` to `running` with a conditional
-   `UPDATE … WHERE status = 'queued'`. If no row changes (the job is already
-   done, or the id was delivered twice) it skips the job.
-4. It runs the model (loaded once at start-up), writes the mask to
-   `masks/<job id>.png`, and marks the
-   job `succeeded`, or `failed` with the error if the model or the job's own
-   data was the problem.
+3. The worker flips the row from `queued` to `running` and counts the
+   attempt, with a conditional `UPDATE … WHERE status = 'queued'`. If no row
+   changes (the job is already done, or the id was delivered twice) it skips
+   the job.
+4. It runs the model (loaded once at start-up) under a time limit, writes the
+   mask to `masks/<job id>.png`, and records the outcome (below).
 5. Only then does it remove the id from its processing list.
 
 The queue carries only ids; Postgres is the record of each job. The queue is
-about 60 lines in `src/surgiserve/job_queue.py`, written by hand rather than
-using Celery or RQ, so every step, and later every failure path, is visible.
+written by hand in `src/surgiserve/job_queue.py` rather than using Celery or
+RQ, so every step and every failure path is visible code.
 
-What happens when things break, today:
+## When things go wrong
 
-| Failure | Result |
-|---------|--------|
+```
+queued -> running -> succeeded
+                  -> failed          input missing or unreadable: retrying can't help
+                  -> queued          model error or timeout: retry after a backoff
+                  -> dead_lettered   out of attempts (3 by default)
+```
+
+| Failure | What happens |
+|---------|--------------|
+| Model raises, or an attempt runs past the timeout (30 s) | Back to `queued`; the id waits in a Redis sorted set for 2 s, 4 s, … (capped at 60 s, randomly scaled by 0.5-1 so retries do not arrive in step), then returns to the queue |
+| The same, on the last attempt | `dead_lettered`, with the last error |
+| Stored input missing or unreadable | `failed` at once; no retry |
+| Worker killed mid-job | Its heartbeat key (TTL 15 s) expires; another worker resets the job to `queued` and puts the id back on the queue |
+| A job that keeps killing its worker | When its worker dies on its last allowed attempt, it is dead-lettered instead of requeued (a crash counts as an attempt) |
+| A worker presumed dead wakes up and finishes | Its result is discarded: every final update matches on the attempt number, which a newer attempt has changed |
 | Redis down when a job is submitted | Row and file removed, `503`, client retries |
-| Model raises, or the input file is missing | Job `failed` with the error; not retried yet |
-| Database or Redis down while a worker holds a job | Id stays on the worker's processing list; the job stays `queued` |
-| Worker killed mid-job | Id stays on its processing list; the job stays `running` |
+| A job left `queued` with its id in no queue (a process died between a database write and the Redis step) | After 5 minutes the sweep re-enqueues it |
+| Database or Redis down while a worker holds a job | The id stays on that worker's processing list; the worker's next maintenance pass, between jobs, puts it back on the queue |
 | Worker sent SIGTERM (`docker compose stop`) | Finishes the current job, then exits |
 
-The ids held on processing lists are not recovered yet, and a job whose id
-never reached Redis stays `queued`. Recovery, retries, timeouts and a
-dead-letter queue are Milestone 4.
+Every worker runs the maintenance pass (promote due retries, recover dead
+workers' jobs, sweep stranded ones) every 5 s. It is safe with many workers:
+each Redis step is one atomic command or Lua script, and each database change
+is a conditional `UPDATE`, so whoever gets there first does the work.
+
+Dead-lettered jobs stay in Postgres (`status = 'dead_lettered'`) rather than
+in a second Redis list, so there is one record of them, not two to keep in
+step. An operator command lists and requeues them; it is not an HTTP route,
+because the API has no authentication:
+
+```bash
+docker compose exec worker python -m surgiserve.admin dead-letters
+docker compose exec worker python -m surgiserve.admin requeue <job id> …
+```
+
+Checked live against the Compose stack, not only in tests: a worker
+SIGKILLed mid-job had its job recovered and finished by the other worker; a
+killed and immediately restarted worker had its job recovered (see below);
+a job whose attempts all timed out retried twice with backoff, was
+dead-lettered, then requeued with the command above and succeeded.
+
+**A bug the kill test found.** Worker ids were `hostname-pid`. In a container
+the pid is always 1, so a worker that crashed and was restarted by Docker came
+back with the dead worker's id. Its fresh heartbeat made the dead worker look
+alive, and the job it held stayed `running` indefinitely. Ids now carry a
+random suffix per process start.
+
+Known limits:
+
+- The timeout uses `SIGALRM`, which Python handles between bytecodes. The
+  model's many short native calls leave room for it, but a single native call
+  that never returned would not be interrupted; running the model in a child
+  process would cover that.
+- A retry starts up to one maintenance interval (5 s) after its backoff ends,
+  since that is when due retries are promoted.
+- The stranded-job sweep checks each candidate with `LPOS`, which scans the
+  queue: fine for a handful of candidates, not for a very long backlog.
 
 ## API
 
@@ -114,14 +161,15 @@ A moment later, `GET /jobs/{id}`:
 ```json
 {"id": "f9bd6e21-…", "status": "succeeded",
  "created_at": "…", "updated_at": "…", "started_at": "…", "finished_at": "…",
- "model": "surgiseg-resnet18-unet@5c2308207401", "error": null,
+ "model": "surgiseg-resnet18-unet@5c2308207401", "attempts": 1, "error": null,
  "mask_url": "/jobs/f9bd6e21-…/mask",
  "input": {"filename": "checkerboard-256.png", "format": "PNG",
            "width": 256, "height": 256, "size_bytes": 647, "sha256": "e390…"}}
 ```
 
 `model` names the network and the first 12 characters of its checkpoint's
-SHA-256, so every stored mask says which weights produced it.
+SHA-256, so every stored mask says which weights produced it. `attempts`
+counts starts, including ones cut short by a worker dying.
 
 ### What an upload must be
 

@@ -22,15 +22,22 @@ class Base(DeclarativeBase):
 
 
 class JobStatus(StrEnum):
-    """The job lifecycle: queued -> running -> succeeded | failed.
+    """The job lifecycle.
 
-    Every transition is a conditional UPDATE on the current status, so a job
-    id delivered twice cannot run twice."""
+    queued -> running -> succeeded
+                      -> failed         (a problem retrying cannot fix)
+                      -> queued         (retry after a backoff)
+                      -> dead_lettered  (out of attempts)
+
+    Every transition is a conditional UPDATE on the current status (and, for
+    finishing, on the attempt number), so a job id delivered twice cannot run
+    twice and a worker presumed dead cannot overwrite a newer attempt."""
 
     QUEUED = "queued"
     RUNNING = "running"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
+    DEAD_LETTERED = "dead_lettered"
 
 
 class Job(Base):
@@ -38,6 +45,7 @@ class Job(Base):
     __table_args__ = (
         CheckConstraint("width > 0 AND height > 0", name="positive_dimensions"),
         CheckConstraint("size_bytes > 0", name="positive_size"),
+        CheckConstraint("attempts >= 0", name="non_negative_attempts"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
@@ -65,11 +73,13 @@ class Job(Base):
     size_bytes: Mapped[int]
     sha256: Mapped[str] = mapped_column(String(64))
 
-    # Filled in by the worker.
+    # Filled in by the worker. Counts starts, including ones cut short by a
+    # worker dying, so a job that keeps killing workers runs out of attempts.
+    attempts: Mapped[int] = mapped_column(default=0, server_default="0")
     model_name: Mapped[str | None] = mapped_column(String(64))
     # Mask path relative to the storage directory; set only on success.
     result_path: Mapped[str | None] = mapped_column(String(255))
-    # Why the job failed; set only on failure.
+    # Why the last attempt failed; kept while a retry is pending.
     error: Mapped[str | None] = mapped_column(Text)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
