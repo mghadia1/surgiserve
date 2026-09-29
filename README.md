@@ -16,7 +16,7 @@ queue, a database, workers, failure handling and load testing.
 
 | # | Milestone | Status |
 |---|-----------|--------|
-| 0 | Skeleton: tooling, CI, `/health`, Compose with only the API | Built; waiting on first CI run |
+| 0 | Skeleton: tooling, CI, `/health`, Compose with only the API | Done |
 | 1 | Postgres and Alembic, `POST /jobs`, `GET /jobs/{id}`, input validation | Not started |
 | 2 | Redis queue and a worker running a fake model, end to end | Not started |
 | 3 | Real inference with the surgiseg-ml checkpoint, masks and result links | Not started |
