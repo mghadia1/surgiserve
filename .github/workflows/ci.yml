@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: python -m pip install -e '.[dev]'
+
+      - name: ruff
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: mypy
+        run: mypy
+
+      - name: pytest
+        run: python -m pytest -q
+
+  compose:
+    # The tests exercise the app in-process; this exercises the image the
+    # way a user runs it: built by Compose, reached over the network.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: compose up
+        run: docker compose up --build --detach --wait
+
+      - name: /health from outside the container
+        run: curl --fail --silent --show-error http://localhost:8000/health
+
+      - name: logs on failure
+        if: failure()
+        run: docker compose logs
+
+      - name: compose down
+        if: always()
+        run: docker compose down

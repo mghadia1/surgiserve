@@ -1,0 +1,8 @@
+# Milestone 0: the API only. Postgres arrives in Milestone 1, Redis and the
+# worker in Milestone 2.
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    restart: unless-stopped

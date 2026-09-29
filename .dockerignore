@@ -1,8 +1,13 @@
-.git
 .venv
+.git
 .github
-__pycache__
+**/__pycache__
 .pytest_cache
+.mypy_cache
 .ruff_cache
+build
+*.egg-info
 tests
+*.pt
 weights
+.DS_Store
