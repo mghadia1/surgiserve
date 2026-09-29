@@ -1,0 +1,136 @@
+"""The /jobs routes."""
+
+import hashlib
+import uuid
+from collections.abc import Iterator
+from datetime import datetime
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from .models import Job, JobStatus
+from .settings import Settings
+from .storage import save_atomically
+from .validation import InvalidUpload, display_filename, validate_image
+
+router = APIRouter()
+
+
+def get_settings(request: Request) -> Settings:
+    settings: Settings = request.app.state.settings
+    return settings
+
+
+def get_session(request: Request) -> Iterator[Session]:
+    with request.app.state.session_factory() as session:
+        yield session
+
+
+SettingsDep = Annotated[Settings, Depends(get_settings)]
+SessionDep = Annotated[Session, Depends(get_session)]
+
+
+class JobInput(BaseModel):
+    filename: str | None
+    format: str
+    width: int
+    height: int
+    size_bytes: int
+    sha256: str
+
+
+class JobOut(BaseModel):
+    id: uuid.UUID
+    status: JobStatus
+    created_at: datetime
+    updated_at: datetime
+    input: JobInput
+
+    @classmethod
+    def from_job(cls, job: Job) -> "JobOut":
+        return cls(
+            id=job.id,
+            status=job.status,
+            created_at=job.created_at,
+            updated_at=job.updated_at,
+            input=JobInput(
+                filename=job.original_filename,
+                format=job.image_format,
+                width=job.width,
+                height=job.height,
+                size_bytes=job.size_bytes,
+                sha256=job.sha256,
+            ),
+        )
+
+
+# Sync handlers: FastAPI runs them in a thread pool, so the blocking database
+# and file calls below never stall the event loop.
+@router.post("/jobs", status_code=202)
+def create_job(
+    image: UploadFile,
+    response: Response,
+    session: SessionDep,
+    settings: SettingsDep,
+) -> JobOut:
+    """Accept an image and queue a segmentation job for it."""
+
+    # Read one byte past the limit, so an oversized file is detected without
+    # reading all of it. (Uploads that declare their size are already refused
+    # by the Content-Length check before the body is read.)
+    data = image.file.read(settings.max_upload_bytes + 1)
+    if len(data) > settings.max_upload_bytes:
+        raise HTTPException(413, too_large_detail(settings.max_upload_bytes))
+    try:
+        validated = validate_image(
+            data,
+            min_side=settings.min_image_side,
+            max_side=settings.max_image_side,
+        )
+    except InvalidUpload as error:
+        raise HTTPException(error.status_code, error.detail) from None
+
+    job_id = uuid.uuid4()
+    relative_path = f"inputs/{job_id}.{validated.extension}"
+    # File first, then row. If the insert fails the file is removed; if the
+    # process dies between the two, an unreferenced file is left behind, which
+    # is harmless. The reverse order could leave a job whose image is missing.
+    stored = save_atomically(settings.storage_dir, relative_path, data)
+    job = Job(
+        id=job_id,
+        status=JobStatus.QUEUED,
+        input_path=relative_path,
+        original_filename=display_filename(image.filename),
+        image_format=validated.format,
+        width=validated.width,
+        height=validated.height,
+        size_bytes=len(data),
+        sha256=hashlib.sha256(data).hexdigest(),
+    )
+    try:
+        session.add(job)
+        session.commit()
+    except BaseException:
+        session.rollback()
+        stored.unlink(missing_ok=True)
+        raise
+    session.refresh(job)
+
+    response.headers["Location"] = f"/jobs/{job_id}"
+    return JobOut.from_job(job)
+
+
+@router.get("/jobs/{job_id}")
+def get_job(job_id: uuid.UUID, session: SessionDep) -> JobOut:
+    """Return a job's status and what was uploaded."""
+
+    job = session.get(Job, job_id)
+    if job is None:
+        raise HTTPException(404, "job not found")
+    return JobOut.from_job(job)
+
+
+def too_large_detail(limit: int) -> str:
+    return f"upload exceeds the {limit}-byte limit"

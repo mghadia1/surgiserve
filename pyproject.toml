@@ -9,7 +9,13 @@ description = "Educational inference service for the surgiseg-ml instrument-segm
 requires-python = ">=3.12"
 license = "MIT"
 dependencies = [
+  "alembic>=1.20",
   "fastapi>=0.142",
+  "pillow>=12.3",
+  "psycopg[binary]>=3.3",
+  "pydantic-settings>=2.15",
+  "python-multipart>=0.0.32",
+  "sqlalchemy>=2.1",
   "uvicorn>=0.54",
 ]
 
@@ -40,4 +46,4 @@ select = ["E", "F", "I", "B", "UP"]
 
 [tool.mypy]
 strict = true
-files = ["src", "tests"]
+files = ["src", "tests", "migrations"]

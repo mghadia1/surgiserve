@@ -1,8 +1,53 @@
-# Milestone 0: the API only. Postgres arrives in Milestone 1, Redis and the
-# worker in Milestone 2.
+# Milestone 1: Postgres, a one-shot migration step, and the API.
+# Redis and the worker arrive in Milestone 2.
+
+# Development-only credentials. Nothing here is meant for a shared deployment.
+x-database-url: &database-url postgresql+psycopg://surgiserve:surgiserve@db:5432/surgiserve
+
 services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: surgiserve
+      POSTGRES_PASSWORD: surgiserve
+      POSTGRES_DB: surgiserve
+    # Published on 5433, and only on localhost, so it neither clashes with a
+    # Postgres already on 5432 nor listens on the network.
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "surgiserve", "-d", "surgiserve"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  # Runs `alembic upgrade head` once and exits. The API starts only after it
+  # has exited successfully, so the API never sees an unmigrated schema.
+  migrate:
+    build: .
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      SURGISERVE_DATABASE_URL: *database-url
+    depends_on:
+      db:
+        condition: service_healthy
+
   api:
     build: .
     ports:
       - "8000:8000"
+    environment:
+      SURGISERVE_DATABASE_URL: *database-url
+      SURGISERVE_STORAGE_DIR: /data/storage
+    volumes:
+      - storage:/data/storage
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
+
+volumes:
+  pgdata:
+  storage:

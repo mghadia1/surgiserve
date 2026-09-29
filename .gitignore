@@ -13,3 +13,5 @@ weights/*
 !weights/.gitkeep
 *.pt
 *.pth
+# Local storage when the API runs outside Docker.
+var/

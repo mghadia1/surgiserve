@@ -9,6 +9,24 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: surgiserve
+          POSTGRES_PASSWORD: surgiserve
+          POSTGRES_DB: surgiserve
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U surgiserve -d surgiserve"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      # The tests create this database and migrate it themselves. Without this
+      # variable the database tests would fail here (in CI) rather than skip.
+      SURGISERVE_TEST_DATABASE_URL: postgresql+psycopg://surgiserve:surgiserve@localhost:5432/surgiserve_test
     steps:
       - uses: actions/checkout@v6
 
@@ -31,8 +49,9 @@ jobs:
         run: python -m pytest -q
 
   compose:
-    # The tests exercise the app in-process; this exercises the image the
-    # way a user runs it: built by Compose, reached over the network.
+    # The tests exercise the app in-process; this exercises the images the
+    # way a user runs them: built by Compose, migrated by the one-shot
+    # migrate service, and reached over the network.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -40,8 +59,8 @@ jobs:
       - name: compose up
         run: docker compose up --build --detach --wait
 
-      - name: /health from outside the container
-        run: curl --fail --silent --show-error http://localhost:8000/health
+      - name: smoke test over HTTP
+        run: ./scripts/smoke.sh
 
       - name: logs on failure
         if: failure()
@@ -49,4 +68,4 @@ jobs:
 
       - name: compose down
         if: always()
-        run: docker compose down
+        run: docker compose down --volumes

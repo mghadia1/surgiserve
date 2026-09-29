@@ -2,7 +2,11 @@ PYTHON ?= python3.12
 VENV := .venv
 BIN := $(VENV)/bin
 
-.PHONY: install lint format typecheck test check up down smoke clean
+.PHONY: install lint format typecheck db-up test migrate check up down reset smoke clean
+
+# The Compose database as published on the host, with a separate database for
+# tests so they never touch development data.
+TEST_DATABASE_URL ?= postgresql+psycopg://surgiserve:surgiserve@localhost:5433/surgiserve_test
 
 $(BIN)/python:
 	$(PYTHON) -m venv $(VENV)
@@ -21,8 +25,15 @@ format:
 typecheck:
 	$(BIN)/mypy
 
-test:
-	$(BIN)/python -m pytest -q
+db-up:
+	docker compose up --detach --wait db
+
+test: db-up
+	SURGISERVE_TEST_DATABASE_URL=$(TEST_DATABASE_URL) $(BIN)/python -m pytest -q
+
+# Apply migrations to the development database from the host.
+migrate: db-up
+	$(BIN)/alembic upgrade head
 
 # Everything CI runs before the Docker job.
 check: lint typecheck test
@@ -34,9 +45,13 @@ up:
 down:
 	docker compose down
 
-# Bring the stack up, hit /health from outside the container, tear it down.
+# Also delete the database and storage volumes.
+reset:
+	docker compose down --volumes
+
+# Bring the stack up, exercise it over HTTP from outside, tear it down.
 smoke: up
-	curl --fail --silent --show-error http://localhost:8000/health; echo
+	./scripts/smoke.sh
 	$(MAKE) down
 
 clean:

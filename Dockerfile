@@ -9,9 +9,15 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
 RUN python -m pip install --no-cache-dir .
+COPY alembic.ini ./
+COPY migrations ./migrations
 
-# Run as an unprivileged user; the service never needs root.
-RUN useradd --create-home --uid 10001 surgiserve
+# Run as an unprivileged user; the service never needs root. The storage
+# directory is created here, owned by that user, because a new named volume
+# copies the ownership of the directory it is mounted over.
+RUN useradd --create-home --uid 10001 surgiserve \
+    && mkdir -p /data/storage \
+    && chown surgiserve:surgiserve /data/storage
 USER surgiserve
 
 EXPOSE 8000
