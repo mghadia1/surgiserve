@@ -67,6 +67,15 @@ class Settings(BaseSettings):
     # queue, is re-enqueued.
     stranded_after_seconds: float = 300.0
 
+    # Logs: "json" (one object per line) or "text".
+    log_format: Literal["json", "text"] = "json"
+    log_level: str = "INFO"
+    # The worker touches this file on every pass of its loop; its container
+    # health check fails if the file is older than the maximum age. That is
+    # longer than the job timeout, since a pass includes one job.
+    worker_liveness_file: Path = Path("/tmp/surgiserve-worker-alive")
+    worker_liveness_max_age_seconds: float = 60.0
+
     # How long one wait on the queue lasts. The worker checks for a shutdown
     # request between waits, so this bounds how long stopping can take.
     worker_poll_seconds: float = 1.0

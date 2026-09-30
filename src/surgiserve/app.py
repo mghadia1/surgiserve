@@ -1,33 +1,22 @@
-"""HTTP API.
-
-``/health`` is a liveness check only: it says the process is up and serving
-requests, and deliberately does not touch the database or Redis. The deep
-check that also verifies Postgres, Redis and the model arrives in Milestone 5.
-"""
-
-from typing import Literal
+"""HTTP API. Health checks are in ``health.py``, job routes in ``jobs.py``."""
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 from redis import Redis
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from . import __version__
+from .health import router as health_router
 from .job_queue import JobQueue
 from .jobs import router as jobs_router
 from .jobs import too_large_detail
+from .logs import RequestLogging
 from .settings import Settings
 
 # Room for the multipart boundaries and part headers around the file itself.
 MULTIPART_OVERHEAD_BYTES = 64 * 1024
-
-
-class Health(BaseModel):
-    status: Literal["ok"]
-    version: str
 
 
 class ContentLengthLimit:
@@ -71,13 +60,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         ),
     )
     # create_engine does not connect; the first query does. So the app (and
-    # /health) starts even while the database is still coming up.
-    engine = create_engine(settings.database_url, pool_pre_ping=True)
+    # /health) starts even while the database is still coming up. Short
+    # timeouts, so a dependency that is down fails a request (or a readiness
+    # check) in seconds instead of hanging it.
+    engine = create_engine(
+        settings.database_url,
+        pool_pre_ping=True,
+        connect_args={"connect_timeout": 3},
+    )
     app.state.settings = settings
     app.state.engine = engine
     app.state.session_factory = sessionmaker(engine, expire_on_commit=False)
     # Like the engine, the Redis client connects on first use.
-    app.state.redis = Redis.from_url(settings.redis_url, decode_responses=True)
+    app.state.redis = Redis.from_url(
+        settings.redis_url,
+        decode_responses=True,
+        socket_connect_timeout=3,
+        socket_timeout=5,
+    )
     app.state.queue = JobQueue(app.state.redis)
 
     app.add_middleware(
@@ -85,11 +85,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         max_body_bytes=settings.max_upload_bytes + MULTIPART_OVERHEAD_BYTES,
         upload_limit=settings.max_upload_bytes,
     )
+    # Added last, so it is outermost: requests refused by the size check
+    # above are logged too.
+    app.add_middleware(RequestLogging)
 
-    @app.get("/health")
-    def health() -> Health:
-        return Health(status="ok", version=__version__)
-
+    app.include_router(health_router)
     app.include_router(jobs_router)
     return app
 

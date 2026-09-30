@@ -21,7 +21,7 @@ queue, a database, workers, failure handling and load testing.
 | 2 | Redis queue and a worker running a fake model, end to end | Built; waiting on CI |
 | 3 | Real inference with the surgiseg-ml checkpoint, masks and result links | Built; waiting on CI |
 | 4 | Retries with backoff, timeouts, dead-letter queue, worker crash recovery | Built; waiting on CI |
-| 5 | Structured JSON logs and a deep `/health` check | Not started |
+| 5 | Structured JSON logs and a deep `/health` check | Built; waiting on CI |
 | 6 | Locust load test with 1, 2 and 4 workers | Not started |
 | 7 | Architecture diagram, design decisions, benchmarks | Not started |
 
@@ -143,11 +143,70 @@ Known limits:
 - The stranded-job sweep checks each candidate with `LPOS`, which scans the
   queue: fine for a handful of candidates, not for a very long backlog.
 
+## Health and logs
+
+**Two health checks, on purpose.** `/health` is liveness: the process is up.
+It touches nothing else, because Docker restarts a container whose liveness
+check fails, and restarting the API would not fix a database outage.
+`/health/ready` is readiness, for deciding whether to send this instance
+traffic. It checks each dependency with a short timeout and answers `503` if
+any fails:
+
+| Check | Passes when |
+|-------|-------------|
+| `database` | Postgres answers a query |
+| `schema` | the database is migrated to the revision the code needs (a test keeps that constant equal to the newest migration) |
+| `redis` | Redis answers `PING` |
+| `storage` | a file can be written to the storage directory and removed |
+
+It also reports, without changing the status code, the live workers and the
+model each runs (read from their heartbeats), queue depths and the number of
+dead-lettered jobs. No live worker is a warning: the API can still accept
+jobs, which wait in the queue.
+
+```json
+{"status": "ok", "checks": {"database": {"ok": true, "ms": 1.2}, "schema": {"ok": true, "detail": "at 0003"}, …},
+ "workers": {"alive": 1, "models": {"surgiseg-resnet18-unet@5c2308207401": 1}},
+ "queue": {"waiting": 0, "delayed": 0, "processing": 0, "dead_lettered": 0}, "warnings": []}
+```
+
+Checked live: with Redis stopped, then Postgres stopped, readiness answered
+`503` naming the failed dependency (in 0.1 s, not a hang) while liveness
+stayed `200`; both returned to `200` when the service came back.
+
+The worker container has its own health check: its main loop touches a file
+on every pass, and the check fails if the file is more than 60 s old. That
+shows the loop itself is turning, which the Redis heartbeat (sent from a
+separate thread) does not.
+
+**Logs** are one JSON object per line, from both services, uvicorn's own
+messages included (the one-shot `migrate` step still logs Alembic's plain
+text). Every line has `ts`, `level`, `service`, `logger`, `event` and
+`message`. Context is attached automatically: every line logged while
+handling a request carries its `request_id` (also returned to the client as
+`X-Request-ID`, or taken from the request if it sends a plain one), and every
+line logged while running a job carries `worker_id`, `job_id` and `attempt`.
+So one job can be followed through both services:
+
+```bash
+docker compose logs --no-log-prefix api worker | grep <job id>
+```
+
+```json
+{"service": "api", "event": "job.created", "request_id": "demo-req-1", "job_id": "7ec7d6e1-…", …}
+{"service": "worker", "event": "job.started", "worker_id": "08898e3b9c6e-1-baa882cb", "attempt": 1, "job_id": "7ec7d6e1-…", …}
+{"service": "worker", "event": "job.succeeded", "attempt": 1, "duration_ms": 308.7, "job_id": "7ec7d6e1-…", …}
+```
+
+Requests to `/health*` are logged at DEBUG, since Docker polls them.
+`SURGISERVE_LOG_FORMAT=text` gives plain lines for local reading.
+
 ## API
 
 | Route | What it does |
 |-------|--------------|
-| `GET /health` | Liveness: the process is up. Does not touch the database or Redis. |
+| `GET /health` | Liveness: the process is up. Touches nothing else. |
+| `GET /health/ready` | Readiness: Postgres, schema revision, Redis and storage all work; `503` if not. Also live workers and their models, queue depths, dead letters. |
 | `POST /jobs` | Multipart upload, field `image`. Returns `202` with the job and a `Location` header. |
 | `GET /jobs/{id}` | The job's status, what was uploaded, and how it went. |
 | `GET /jobs/{id}/mask` | The mask: grayscale PNG the size of the upload, 255 = instrument. `409` until the job has succeeded. |

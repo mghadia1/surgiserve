@@ -27,8 +27,10 @@ USER surgiserve
 
 EXPOSE 8000
 
-# python:3.12-slim has no curl, so the health check uses the standard library.
+# Liveness only (GET /health); see src/surgiserve/health.py for why. The worker
+# service overrides this with its own check in compose.yaml.
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
-    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+    CMD ["python", "-m", "surgiserve.healthcheck", "api"]
 
-CMD ["uvicorn", "surgiserve.app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Sets up JSON logging, then runs uvicorn (see src/surgiserve/serve.py).
+CMD ["python", "-m", "surgiserve.serve"]

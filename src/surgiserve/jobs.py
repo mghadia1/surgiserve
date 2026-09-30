@@ -1,6 +1,7 @@
 """The /jobs routes."""
 
 import hashlib
+import logging
 import uuid
 from collections.abc import Iterator
 from datetime import datetime
@@ -19,6 +20,7 @@ from .storage import save_atomically
 from .validation import InvalidUpload, display_filename, validate_image
 
 router = APIRouter()
+logger = logging.getLogger("surgiserve.jobs")
 
 
 def get_settings(request: Request) -> Settings:
@@ -115,6 +117,11 @@ def create_job(
             max_side=settings.max_image_side,
         )
     except InvalidUpload as error:
+        logger.info(
+            "upload rejected: %s",
+            error.detail,
+            extra={"event": "upload.rejected", "status": error.status_code},
+        )
         raise HTTPException(error.status_code, error.detail) from None
 
     job_id = uuid.uuid4()
@@ -151,8 +158,23 @@ def create_job(
         session.delete(job)
         session.commit()
         stored.unlink(missing_ok=True)
+        logger.exception(
+            "could not enqueue; job undone",
+            extra={"event": "job.enqueue_failed", "job_id": str(job_id)},
+        )
         raise HTTPException(503, "the job queue is unavailable; try again") from None
     session.refresh(job)
+    logger.info(
+        "job created",
+        extra={
+            "event": "job.created",
+            "job_id": str(job_id),
+            "format": validated.format,
+            "width": validated.width,
+            "height": validated.height,
+            "size_bytes": len(data),
+        },
+    )
 
     response.headers["Location"] = f"/jobs/{job_id}"
     return JobOut.from_job(job)

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # End-to-end check against a running Compose stack, over real HTTP:
-# health, upload an image, wait for the worker to finish the job, download the
+# health and readiness, upload an image, wait for the worker to finish the job, download the
 # mask and check it is a PNG the size of the upload, and confirm both files
 # are on the storage volume inside the container.
 set -euo pipefail
@@ -12,6 +12,17 @@ timeout_seconds="${SMOKE_TIMEOUT_SECONDS:-30}"
 echo "GET /health"
 curl --fail --silent --show-error "$base_url/health"
 echo
+
+echo "GET /health/ready"
+ready="$(curl --silent --show-error "$base_url/health/ready")"
+python3 - "$ready" <<'PY'
+import json, sys
+ready = json.loads(sys.argv[1])
+failing = [name for name, check in ready["checks"].items() if not check["ok"]]
+assert ready["status"] == "ok", f"not ready: {failing} {ready['checks']}"
+assert ready["workers"]["alive"] >= 1, "no live worker"
+print(f"ready: all checks pass; workers {ready['workers']['models']}")
+PY
 
 echo "POST /jobs ($image)"
 headers="$(mktemp)"

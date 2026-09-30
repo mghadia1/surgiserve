@@ -8,6 +8,7 @@ change is a conditional UPDATE, so whichever worker gets there first does the
 work and the rest find nothing to do.
 """
 
+import dataclasses
 import io
 import logging
 import os
@@ -31,6 +32,7 @@ from sqlalchemy import create_engine, func, select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from .job_queue import JobQueue
+from .logs import configure_logging, log_context
 from .models import Job, JobStatus
 from .segmentation import FakeModel, SegmentationModel
 from .settings import Settings
@@ -145,28 +147,36 @@ def describe(error: BaseException) -> str:
 
 class Heartbeat:
     """Keeps the worker's liveness key fresh from a background thread, so a
-    long job does not make a healthy worker look dead."""
+    long job does not make a healthy worker look dead. The key also carries
+    what the readiness check reports: the model this worker runs."""
 
-    def __init__(self, queue: JobQueue, worker_id: str, policy: Policy) -> None:
+    def __init__(
+        self, queue: JobQueue, worker_id: str, policy: Policy, info: dict[str, str]
+    ) -> None:
         self.queue = queue
         self.worker_id = worker_id
         self.policy = policy
+        self.info = info
         self._stop = threading.Event()
         self._thread = threading.Thread(target=self._run, daemon=True)
 
     def __enter__(self) -> "Heartbeat":
         # Beat before the first claim, so the worker never holds a job while
         # looking dead.
-        self.queue.beat(self.worker_id, self.policy.heartbeat_ttl_seconds)
+        self.queue.beat(self.worker_id, self.policy.heartbeat_ttl_seconds, self.info)
         self._thread.start()
         return self
 
     def _run(self) -> None:
         while not self._stop.wait(self.policy.heartbeat_seconds):
             try:
-                self.queue.beat(self.worker_id, self.policy.heartbeat_ttl_seconds)
+                self.queue.beat(
+                    self.worker_id, self.policy.heartbeat_ttl_seconds, self.info
+                )
             except Exception:
-                logger.exception("heartbeat failed for worker %s", self.worker_id)
+                logger.exception(
+                    "heartbeat failed", extra={"event": "worker.heartbeat_failed"}
+                )
 
     def __exit__(
         self,
@@ -198,6 +208,7 @@ class Worker:
         worker_id: str,
         poll_seconds: float = 1.0,
         policy: Policy | None = None,
+        liveness_file: Path | None = None,
     ) -> None:
         self.queue = queue
         self.session_factory = session_factory
@@ -206,6 +217,7 @@ class Worker:
         self.worker_id = worker_id
         self.poll_seconds = poll_seconds
         self.policy = policy or Policy()
+        self.liveness_file = liveness_file
 
     # --- the loop -----------------------------------------------------------
 
@@ -220,10 +232,19 @@ class Worker:
             # Checked here, before any job is claimed. Raised inside a job, it
             # would look like a job failure and be retried until dead-lettered.
             raise RuntimeError("job timeouts use SIGALRM and need the main thread")
-        logger.info("worker %s started with model %s", self.worker_id, self.model.name)
-        with Heartbeat(self.queue, self.worker_id, self.policy):
+        with (
+            log_context(worker_id=self.worker_id),
+            Heartbeat(
+                self.queue, self.worker_id, self.policy, {"model": self.model.name}
+            ),
+        ):
+            logger.info(
+                "worker started",
+                extra={"event": "worker.started", "model": self.model.name},
+            )
             next_maintenance = 0.0
             while not stop.is_set():
+                self._touch_liveness_file()
                 try:
                     if time.monotonic() >= next_maintenance:
                         self.maintain()
@@ -235,10 +256,14 @@ class Worker:
                     # Database or Redis trouble, not a bad job: a claimed id
                     # stays on this worker's processing list (see run_once).
                     logger.exception(
-                        "worker %s hit an infrastructure error", self.worker_id
+                        "infrastructure error", extra={"event": "worker.error"}
                     )
                     stop.wait(ERROR_BACKOFF_SECONDS)
-        logger.info("worker %s stopped", self.worker_id)
+            logger.info("worker stopped", extra={"event": "worker.stopped"})
+
+    def _touch_liveness_file(self) -> None:
+        if self.liveness_file is not None:
+            self.liveness_file.touch()
 
     def run_once(self) -> Outcome | None:
         """Claim and handle at most one job. Returns None if none arrived."""
@@ -249,7 +274,11 @@ class Worker:
         try:
             job_id = UUID(raw_job_id)
         except ValueError:
-            logger.error("dropping malformed queue entry %r", raw_job_id)
+            logger.error(
+                "dropping malformed queue entry %r",
+                raw_job_id,
+                extra={"event": "queue.malformed_entry"},
+            )
             self.queue.ack(self.worker_id, raw_job_id)
             return Outcome.SKIPPED
 
@@ -262,30 +291,39 @@ class Worker:
     # --- one job ------------------------------------------------------------
 
     def process(self, job_id: UUID) -> Outcome:
-        started_job = self._start(job_id)
-        if started_job is None:
-            logger.info("job %s skipped: not queued", job_id)
-            return Outcome.SKIPPED
-        input_path, attempt = started_job
+        with log_context(job_id=str(job_id)):
+            started_job = self._start(job_id)
+            if started_job is None:
+                logger.info("job skipped: not queued", extra={"event": "job.skipped"})
+                return Outcome.SKIPPED
+            input_path, attempt = started_job
+            with log_context(attempt=attempt):
+                logger.info("job started", extra={"event": "job.started"})
+                return self._attempt(job_id, input_path, attempt)
 
+    def _attempt(self, job_id: UUID, input_path: str, attempt: int) -> Outcome:
         started = time.perf_counter()
         try:
             with time_limit(self.policy.job_timeout_seconds):
                 result_path = self._segment(job_id, input_path)
         except PermanentJobError as error:
             self._finish(job_id, attempt, JobStatus.FAILED, error=str(error))
-            logger.warning("job %s failed permanently: %s", job_id, error)
+            logger.warning(
+                "job failed permanently: %s",
+                error,
+                extra={"event": "job.failed", "error": str(error)},
+            )
             return Outcome.FAILED
         except Exception as error:
             # The model raised, or the attempt timed out. Possibly transient.
             return self._retry_or_dead_letter(job_id, attempt, describe(error))
 
+        duration_ms = round((time.perf_counter() - started) * 1000, 1)
         self._finish(job_id, attempt, JobStatus.SUCCEEDED, result_path=result_path)
         logger.info(
-            "job %s succeeded on attempt %d in %.0f ms",
-            job_id,
-            attempt,
-            (time.perf_counter() - started) * 1000,
+            "job succeeded in %.0f ms",
+            duration_ms,
+            extra={"event": "job.succeeded", "duration_ms": duration_ms},
         )
         return Outcome.SUCCEEDED
 
@@ -331,7 +369,10 @@ class Worker:
         if attempt >= self.policy.max_attempts:
             self._finish(job_id, attempt, JobStatus.DEAD_LETTERED, error=error)
             logger.error(
-                "job %s dead-lettered after %d attempts: %s", job_id, attempt, error
+                "job dead-lettered after %d attempts: %s",
+                attempt,
+                error,
+                extra={"event": "job.dead_lettered", "error": error},
             )
             return Outcome.DEAD_LETTERED
 
@@ -353,11 +394,14 @@ class Worker:
         if requeued is not None:
             self.queue.schedule(job_id, delay)
         logger.warning(
-            "job %s attempt %d failed, retrying in %.1fs: %s",
-            job_id,
-            attempt,
+            "attempt failed, retrying in %.1fs: %s",
             delay,
             error,
+            extra={
+                "event": "job.retry_scheduled",
+                "retry_in_s": round(delay, 2),
+                "error": error,
+            },
         )
         return Outcome.RETRY
 
@@ -397,9 +441,8 @@ class Worker:
             session.commit()
         if finished is None:
             logger.warning(
-                "job %s attempt %d finished late; a newer attempt owns it",
-                job_id,
-                attempt,
+                "attempt finished late; a newer attempt owns the job",
+                extra={"event": "job.stale_result_discarded"},
             )
         return finished is not None
 
@@ -411,7 +454,10 @@ class Worker:
         requeued = self.requeue_stranded()
         result = Maintenance(promoted, recovered, dead_lettered, requeued)
         if result != Maintenance():
-            logger.info("maintenance: %s", result)
+            logger.info(
+                "maintenance moved jobs",
+                extra={"event": "maintenance", **dataclasses.asdict(result)},
+            )
         return result
 
     def recover_dead_workers(self) -> tuple[int, int]:
@@ -448,7 +494,12 @@ class Worker:
                 if self.queue.return_to_queue(worker_id, raw_job_id):
                     recovered += 1
                     logger.warning(
-                        "requeued job %s from dead worker %s", job_id, worker_id
+                        "requeued a job held by a dead worker",
+                        extra={
+                            "event": "job.recovered",
+                            "job_id": str(job_id),
+                            "dead_worker_id": worker_id,
+                        },
                     )
         return recovered, dead_lettered
 
@@ -519,7 +570,10 @@ class Worker:
                 session.commit()
         for job_id in stranded:
             self.queue.enqueue(job_id)
-            logger.warning("re-enqueued stranded job %s", job_id)
+            logger.warning(
+                "re-enqueued a stranded job",
+                extra={"event": "job.unstranded", "job_id": str(job_id)},
+            )
         return len(stranded)
 
 
@@ -556,10 +610,10 @@ def build_model(settings: Settings) -> SegmentationModel:
 
 
 def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
-    )
     settings = Settings()
+    configure_logging(
+        "worker", log_format=settings.log_format, level=settings.log_level
+    )
     engine = create_engine(settings.database_url, pool_pre_ping=True)
     worker = Worker(
         queue=JobQueue(Redis.from_url(settings.redis_url, decode_responses=True)),
@@ -569,6 +623,7 @@ def main() -> None:
         worker_id=new_worker_id(),
         poll_seconds=settings.worker_poll_seconds,
         policy=Policy.from_settings(settings),
+        liveness_file=settings.worker_liveness_file,
     )
 
     stop = threading.Event()
@@ -577,6 +632,7 @@ def main() -> None:
         logger.info(
             "received %s; finishing the current job, then stopping",
             signal.Signals(signum).name,
+            extra={"event": "worker.stopping"},
         )
         stop.set()
 

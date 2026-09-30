@@ -19,8 +19,9 @@ The queue carries only ids. Postgres stays the record of what each job is and
 what happened to it, including which jobs are dead-lettered.
 """
 
+import json
 from collections.abc import Iterator
-from typing import cast
+from typing import Any, cast
 from uuid import UUID
 
 from redis import Redis
@@ -113,16 +114,38 @@ class JobQueue:
 
     # --- liveness and recovery ----------------------------------------------
 
-    def beat(self, worker_id: str, ttl_seconds: float) -> None:
-        """Mark the worker alive for the next ``ttl_seconds``."""
+    def beat(
+        self, worker_id: str, ttl_seconds: float, info: dict[str, Any] | None = None
+    ) -> None:
+        """Mark the worker alive for the next ``ttl_seconds``. ``info`` (such
+        as the model it runs) is stored with the heartbeat for health checks."""
 
-        self.redis.set(heartbeat_key(worker_id), "alive", px=int(ttl_seconds * 1000))
+        self.redis.set(
+            heartbeat_key(worker_id),
+            json.dumps(info or {}),
+            px=int(ttl_seconds * 1000),
+        )
 
     def forget(self, worker_id: str) -> None:
         self.redis.delete(heartbeat_key(worker_id))
 
     def is_alive(self, worker_id: str) -> bool:
         return bool(self.redis.exists(heartbeat_key(worker_id)))
+
+    def live_workers(self) -> dict[str, dict[str, Any]]:
+        """Live worker ids, each with the info from its latest heartbeat."""
+
+        workers: dict[str, dict[str, Any]] = {}
+        for key in self.redis.scan_iter(match=f"{HEARTBEAT_KEY_PREFIX}*"):
+            value = cast(str | None, self.redis.get(key))
+            if value is None:  # expired between SCAN and GET
+                continue
+            try:
+                info = json.loads(value)
+            except json.JSONDecodeError:
+                info = {}
+            workers[cast(str, key).removeprefix(HEARTBEAT_KEY_PREFIX)] = info
+        return workers
 
     def workers_holding_jobs(self) -> Iterator[str]:
         """Ids of workers with a non-empty processing list (Redis deletes a
@@ -170,6 +193,18 @@ class JobQueue:
             self.redis.zrange(DELAYED_KEY, 0, -1, withscores=True),
         )
         return dict(entries)
+
+    def depths(self) -> dict[str, int]:
+        """How many ids are waiting, scheduled for retry, and held by workers."""
+
+        held = 0
+        for worker_id in self.workers_holding_jobs():
+            held += self.redis.llen(processing_key(worker_id))
+        return {
+            "waiting": self.redis.llen(QUEUE_KEY),
+            "delayed": self.redis.zcard(DELAYED_KEY),
+            "processing": held,
+        }
 
     def processing(self, worker_id: str) -> list[str]:
         return cast(list[str], self.redis.lrange(processing_key(worker_id), 0, -1))

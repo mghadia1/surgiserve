@@ -12,7 +12,12 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 
 from surgiserve.app import create_app
+from surgiserve.logs import install_context_factory
 from surgiserve.settings import Settings
+
+# Log records carry context fields (request_id, job_id, ...) as attributes, so
+# tests can read them from caplog as the JSON formatter would.
+install_context_factory()
 
 ROOT = Path(__file__).resolve().parents[1]
 TEST_DATABASE_URL_ENV = "SURGISERVE_TEST_DATABASE_URL"
