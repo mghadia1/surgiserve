@@ -19,7 +19,7 @@ $(BIN)/python:
 # CPU-only PyTorch first; from PyPI, x86 Linux would get the CUDA build.
 install: $(BIN)/python
 	$(BIN)/python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.13.0
-	$(BIN)/python -m pip install -e '.[dev,model]'
+	$(BIN)/python -m pip install -e '.[dev,model,bench]'
 
 lint:
 	$(BIN)/ruff check .

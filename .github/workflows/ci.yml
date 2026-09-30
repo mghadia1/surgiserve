@@ -47,7 +47,8 @@ jobs:
 
       # CPU-only PyTorch first; from PyPI, x86 Linux would get the CUDA build.
       - run: python -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.13.0
-      - run: python -m pip install -e '.[dev,model]'
+      # bench is needed too: mypy checks bench/, which imports locust.
+      - run: python -m pip install -e '.[dev,model,bench]'
 
       - name: ruff
         run: |

@@ -435,7 +435,7 @@ covered by a test where one could be written:
 Needs Python 3.12.
 
 ```bash
-make install   # create .venv; CPU-only torch, then the package, model and dev extras
+make install   # create .venv; CPU-only torch, then the package with its dev, model and bench extras
 make check     # ruff, mypy --strict, pytest (starts the Compose database)
 make smoke     # start the stack, upload an image over HTTP, stop it
 ```
