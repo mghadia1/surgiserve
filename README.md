@@ -17,11 +17,11 @@ queue, a database, workers, failure handling and load testing.
 | # | Milestone | Status |
 |---|-----------|--------|
 | 0 | Skeleton: tooling, CI, `/health`, Compose with only the API | Done |
-| 1 | Postgres and Alembic, `POST /jobs`, `GET /jobs/{id}`, input validation | Built; waiting on CI |
-| 2 | Redis queue and a worker running a fake model, end to end | Built; waiting on CI |
-| 3 | Real inference with the surgiseg-ml checkpoint, masks and result links | Built; waiting on CI |
-| 4 | Retries with backoff, timeouts, dead-letter queue, worker crash recovery | Built; waiting on CI |
-| 5 | Structured JSON logs and a deep `/health` check | Built; waiting on CI |
+| 1 | Postgres and Alembic, `POST /jobs`, `GET /jobs/{id}`, input validation | Done |
+| 2 | Redis queue and a worker running a fake model, end to end | Done |
+| 3 | Real inference with the surgiseg-ml checkpoint, masks and result links | Done |
+| 4 | Retries with backoff, timeouts, dead-letter queue, worker crash recovery | Done |
+| 5 | Structured JSON logs and a deep `/health` check | Done |
 | 6 | Locust load test with 1, 2 and 4 workers | Tooling built; **no clean measurement yet** (see Load testing) |
 | 7 | Architecture diagram, design decisions, benchmarks | Diagram and decisions written; benchmarks wait on Milestone 6 |
 
