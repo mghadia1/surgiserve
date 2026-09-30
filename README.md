@@ -23,47 +23,80 @@ queue, a database, workers, failure handling and load testing.
 | 4 | Retries with backoff, timeouts, dead-letter queue, worker crash recovery | Built; waiting on CI |
 | 5 | Structured JSON logs and a deep `/health` check | Built; waiting on CI |
 | 6 | Locust load test with 1, 2 and 4 workers | Tooling built; **no clean measurement yet** (see Load testing) |
-| 7 | Architecture diagram, design decisions, benchmarks | Not started |
+| 7 | Architecture diagram, design decisions, benchmarks | Diagram and decisions written; benchmarks wait on Milestone 6 |
 
 The worker runs the real network: the frozen ResNet-18 U-Net from
 surgiseg-ml (run of 2026-08-03, Dice 0.9226 on Kvasir-Instrument's 118-image
 official test split, scored at 128x128). A fake brightness-threshold model
 remains for running without weights.
 
-## The model
+## Quickstart
 
-- **Code:** the network and its config class are imported from surgiseg-ml,
-  installed at a pinned commit, not copied. `src/surgiserve/surgiseg_model.py`
-  adds only the inference path around it: RGB / 255, stretch to 128x128
-  (bilinear), sigmoid, average with the horizontally flipped prediction,
-  resize the probabilities back to the upload's size, threshold at `>= 0.47`.
-- **Weights:** the frozen checkpoint (57 MB) is not in this repository. The
-  worker reads it from `weights/`, mounted read-only, and refuses to start
-  unless the checkpoint and its config hash to the SHA-256 values recorded by
-  the benchmark.
-- **Reproduces the benchmark exactly:** on all 118 official test images, this
-  service's probabilities are bit-identical to the ones the frozen benchmark
-  scored (maximum difference 0.0; no mask pixel differs at 0.47). A test
-  checks 6 of them wherever the weights and data exist.
-- **Two traps, both tested:**
-  - ImageNet normalisation happens inside the network only if it is built
-    with `normalize_for_imagenet=True`. A network built by hand with defaults
-    loads the same weights without error and gives wrong masks. The service
-    builds it with surgiseg-ml's `build_model`, and a golden test compares the
-    whole path with surgiseg-ml's own `_predict_probabilities`.
-  - The run's `config.json` says `threshold: 0.5`; that is the training
-    default. The benchmark was scored at 0.47, which is what the service uses.
-- **Masks at full size are this service's step.** The benchmark scored masks
-  at 128x128. Resizing back to the upload's size is not part of what it
-  measured, so full-size masks may score a little differently (on one test
-  frame: 0.9833 at 128x128, 0.9776 at 768x576).
-- **Not clinical:** see the note at the top.
+Needs Docker, and the frozen weights in `weights/` (see [The model](#the-model)).
 
-To run with the real weights, copy them from a local surgiseg-ml checkout
-(`make weights`, which reads `SURGISEG_RUN_DIR`). `SURGISERVE_MODEL=fake`
-runs without them; with `SURGISERVE_FAKE_MODEL_DELAY_SECONDS`,
-`SURGISERVE_JOB_TIMEOUT_SECONDS` and `SURGISERVE_MAX_ATTEMPTS` it is how the
-failure paths above were exercised.
+```bash
+make weights                   # copy them from ../surgiseg-ml
+docker compose up --build --detach --wait
+curl http://localhost:8000/health
+docker compose down            # keeps the database and uploads
+docker compose down --volumes  # deletes them
+```
+
+Compose starts Postgres and Redis, then a one-shot `migrate` service that
+runs `alembic upgrade head` and exits, then the API and one worker, which both
+wait for the migration to succeed. Postgres is published on `127.0.0.1:5433`
+and Redis on `127.0.0.1:6380`, with development-only credentials. Redis keeps
+an append-only file, so queued ids survive a Redis restart.
+
+More workers:
+
+```bash
+docker compose up --detach --wait --scale worker=3
+```
+
+Interactive API docs are at <http://localhost:8000/docs> while it runs.
+
+The image is about 1.4 GB, almost all of it CPU-only PyTorch. The first
+build downloads it; later builds reuse the layer.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    client([Client])
+    api["API<br/>FastAPI, sync handlers"]
+    pg[("Postgres<br/>jobs table:<br/>the record of each job")]
+    vol[("Storage volume<br/>inputs/ and masks/")]
+    redis[["Redis<br/>queue, delayed retries,<br/>processing lists, heartbeats"]]
+    worker["Workers x N<br/>ResNet-18 U-Net,<br/>CPU PyTorch"]
+
+    client -- "POST /jobs (image)" --> api
+    client -- "GET /jobs/{id}, /mask" --> api
+    api -- "insert queued row" --> pg
+    api -- "write upload" --> vol
+    api -- "LPUSH job id" --> redis
+    redis -- "BLMOVE job id" --> worker
+    worker -- "status, attempts, result" --> pg
+    worker -- "read upload, write mask" --> vol
+    worker -- "heartbeat, retry schedule,<br/>recovery" --> redis
+```
+
+Three stores, each with one job:
+
+- **Postgres** is the record: what each job is, its status, attempts, error
+  and result. Every status change is a conditional `UPDATE`.
+- **Redis** only moves ids around: who should work on what next, who is
+  holding what, and who is still alive. Losing a Redis entry can delay a job
+  (a sweep puts it back); it cannot change what the job is.
+- **The storage volume** holds the images, named by job id, written
+  atomically.
+
+| Redis key | Type | Holds |
+|-----------|------|-------|
+| `surgiserve:queue` | list | job ids waiting for a worker |
+| `surgiserve:processing:<worker id>` | list | the id a worker has claimed |
+| `surgiserve:delayed` | sorted set | ids waiting to be retried, scored by when |
+| `surgiserve:worker:<worker id>` | string with TTL | a worker's heartbeat and the model it runs |
 
 ## How a job flows
 
@@ -142,6 +175,41 @@ Known limits:
   since that is when due retries are promoted.
 - The stranded-job sweep checks each candidate with `LPOS`, which scans the
   queue: fine for a handful of candidates, not for a very long backlog.
+
+## The model
+
+- **Code:** the network and its config class are imported from surgiseg-ml,
+  installed at a pinned commit, not copied. `src/surgiserve/surgiseg_model.py`
+  adds only the inference path around it: RGB / 255, stretch to 128x128
+  (bilinear), sigmoid, average with the horizontally flipped prediction,
+  resize the probabilities back to the upload's size, threshold at `>= 0.47`.
+- **Weights:** the frozen checkpoint (57 MB) is not in this repository. The
+  worker reads it from `weights/`, mounted read-only, and refuses to start
+  unless the checkpoint and its config hash to the SHA-256 values recorded by
+  the benchmark.
+- **Reproduces the benchmark exactly:** on all 118 official test images, this
+  service's probabilities are bit-identical to the ones the frozen benchmark
+  scored (maximum difference 0.0; no mask pixel differs at 0.47). A test
+  checks 6 of them wherever the weights and data exist.
+- **Two traps, both tested:**
+  - ImageNet normalisation happens inside the network only if it is built
+    with `normalize_for_imagenet=True`. A network built by hand with defaults
+    loads the same weights without error and gives wrong masks. The service
+    builds it with surgiseg-ml's `build_model`, and a golden test compares the
+    whole path with surgiseg-ml's own `_predict_probabilities`.
+  - The run's `config.json` says `threshold: 0.5`; that is the training
+    default. The benchmark was scored at 0.47, which is what the service uses.
+- **Masks at full size are this service's step.** The benchmark scored masks
+  at 128x128. Resizing back to the upload's size is not part of what it
+  measured, so full-size masks may score a little differently (on one test
+  frame: 0.9833 at 128x128, 0.9776 at 768x576).
+- **Not clinical:** see the note at the top.
+
+To run with the real weights, copy them from a local surgiseg-ml checkout
+(`make weights`, which reads `SURGISEG_RUN_DIR`). `SURGISERVE_MODEL=fake`
+runs without them; with `SURGISERVE_FAKE_MODEL_DELAY_SECONDS`,
+`SURGISERVE_JOB_TIMEOUT_SECONDS` and `SURGISERVE_MAX_ATTEMPTS` it is how the
+failure paths above were exercised.
 
 ## Health and logs
 
@@ -304,34 +372,61 @@ A rejected upload leaves no job row and no file. Limits are set with
   refused by the handler. A reverse proxy in front would be the place for a
   hard body limit.
 
-## Quickstart
+## Design decisions
 
-Needs Docker, and the frozen weights in `weights/` (see above).
+Each with what it costs.
 
-```bash
-make weights                   # copy them from ../surgiseg-ml
-docker compose up --build --detach --wait
-curl http://localhost:8000/health
-docker compose down            # keeps the database and uploads
-docker compose down --volumes  # deletes them
-```
+| Decision | Why | Cost, or what would change it |
+|----------|-----|-------------------------------|
+| Hand-written Redis queue instead of Celery or RQ | Every step and failure path is code I can point to | More code to own; a production service would likely adopt a library |
+| Postgres is the record; Redis carries only ids | One source of truth; a lost Redis entry delays a job but cannot corrupt it | Two stores to keep consistent, handled by ordering writes and a sweep |
+| Every state change is a conditional `UPDATE` | Duplicate deliveries and concurrent maintenance are harmless | Each transition needs its expected prior state spelled out |
+| Attempt number as a fencing token | A worker wrongly presumed dead cannot overwrite a newer attempt | None found |
+| Write order: file, then row, then queue | Each failure in between leaves something harmless or recoverable | An orphaned upload file is possible after a crash |
+| Status as VARCHAR plus CHECK, not a native enum | Adding `dead_lettered` in 0003 was a constraint swap | The database does not document the values as a type |
+| Dead letters as a Postgres status, not a Redis list | One record, not two to keep in step | Listing them needs a query, not `LRANGE` |
+| Heartbeat keys with a TTL, ids unique per process start | Detect dead workers without a coordinator | Recovery waits for the TTL (15 s); ids had to change after a restart bug |
+| `SIGALRM` for timeouts | Simple, in-process | Cannot interrupt a native call that never returns; a child process would |
+| Network code imported from surgiseg-ml at a pinned commit | Same model code as the benchmark, not a copy that can drift | The service depends on another repository's layout |
+| Weights outside the image, SHA-256 checked at start | No 57 MB file in git; the worker cannot serve unverified weights | Real weights must be supplied separately (`make weights`) |
+| Liveness and readiness are separate | Restarting the API would not fix a database outage | Two endpoints to understand |
+| JSON logs with context variables | One `grep <job id>` follows a job across services | A small custom formatter to maintain |
+| One image for API and worker | One build, one set of dependencies | The API image carries PyTorch it never imports (1.4 GB) |
+| Synchronous handlers | Plain blocking database and file calls, run in FastAPI's thread pool | Concurrency is bounded by that pool |
+| Thread limit via `OMP_NUM_THREADS` as well as `set_num_threads` | `set_num_threads` alone does not limit oneDNN on ARM | Must be set before torch is imported |
 
-Compose starts Postgres and Redis, then a one-shot `migrate` service that
-runs `alembic upgrade head` and exits, then the API and one worker, which both
-wait for the migration to succeed. Postgres is published on `127.0.0.1:5433`
-and Redis on `127.0.0.1:6380`, with development-only credentials. Redis keeps
-an append-only file, so queued ids survive a Redis restart.
+## Failures found while building it
 
-More workers:
+Each was caught by a test, a live check or a measurement, fixed, and is
+covered by a test where one could be written:
 
-```bash
-docker compose up --detach --wait --scale worker=3
-```
-
-Interactive API docs are at <http://localhost:8000/docs> while it runs.
-
-The image is about 1.4 GB, almost all of it CPU-only PyTorch. The first
-build downloads it; later builds reuse the layer.
+1. **A JPEG cut off inside its header returned 500.** `Image.open` raised a
+   bare `OSError` before decoding started; only decode errors were caught.
+   Now `422`. (Milestone 1, found by a test.)
+2. **A job could stay `queued` forever.** The first job was created before the
+   queue existed, so its id never reached Redis. The same can happen after a
+   crash between the database write and the enqueue. A sweep now re-enqueues
+   such jobs. (Milestone 2, seen in the dev database.)
+3. **A restarted worker reused the dead worker's id.** In a container the pid
+   is always 1, so `hostname-pid` repeated; the fresh heartbeat hid the dead
+   worker and its job stayed `running` indefinitely. Ids now carry a random
+   suffix. (Milestone 4, found by killing and restarting a worker.)
+4. **A live worker never requeued its own leftover ids** after a database or
+   Redis error; recovery skipped live workers. It now does, between jobs.
+   (Milestone 4, found by checking this README against the code.)
+5. **A misconfigured timeout would have burned attempts.** The main-thread
+   check for `SIGALRM` raised inside the job, so it counted as a job failure.
+   The worker now refuses to start instead. (Milestone 4, found by a test.)
+6. **Logging a `job_id` inside a job raised `KeyError`.** Context fields were
+   set as record attributes before logging applied `extra`, and logging
+   refuses the overwrite. Context now lives in one namespaced attribute.
+   (Milestone 5, found by a test.)
+7. **`torch.set_num_threads(1)` did not limit the model to one thread.** On ARM
+   oneDNN sizes its pool from `OMP_NUM_THREADS`; a "1 thread" worker used 2.5
+   CPUs. (Milestone 6, found in `docker stats`, confirmed by profiling.)
+8. **A benchmark run measured the laptop's swap, not the service.** The runner
+   now refuses to start while the host swaps and flags runs that did.
+   (Milestone 6.)
 
 ## Development
 
