@@ -22,7 +22,7 @@ queue, a database, workers, failure handling and load testing.
 | 3 | Real inference with the surgiseg-ml checkpoint, masks and result links | Built; waiting on CI |
 | 4 | Retries with backoff, timeouts, dead-letter queue, worker crash recovery | Built; waiting on CI |
 | 5 | Structured JSON logs and a deep `/health` check | Built; waiting on CI |
-| 6 | Locust load test with 1, 2 and 4 workers | Not started |
+| 6 | Locust load test with 1, 2 and 4 workers | Tooling built; **no clean measurement yet** (see Load testing) |
 | 7 | Architecture diagram, design decisions, benchmarks | Not started |
 
 The worker runs the real network: the frozen ResNet-18 U-Net from
@@ -200,6 +200,53 @@ docker compose logs --no-log-prefix api worker | grep <job id>
 
 Requests to `/health*` are logged at DEBUG, since Docker polls them.
 `SURGISERVE_LOG_FORMAT=text` gives plain lines for local reading.
+
+## Load testing
+
+`bench/run.py` drives a closed-loop Locust load (`bench/locustfile.py`: 16
+users, each uploads a real 768x576 Kvasir-Instrument test frame, waits for its
+job, and uploads the next) against 1, 2 and 4 workers at several PyTorch
+thread settings. Each configuration starts from empty volumes, warms up for
+15 s and is measured for 60 s. Throughput and latency come from the job
+timestamps in Postgres, not from Locust's polling; Locust supplies the API's
+own response times. The first configuration is repeated at the end to detect
+drift.
+
+```bash
+.venv/bin/python -m pip install -e '.[bench]'
+.venv/bin/python bench/run.py --image path/to/frame.jpg
+```
+
+**Status: there is no clean full run yet.** Two attempts are kept in
+`bench/results/`, each with a `NOTE.md` saying why it is not usable:
+
+1. **The thread limit did not work.** The first run limited threads with
+   `torch.set_num_threads` only. A worker "limited to 1 thread" then showed
+   250% CPU in `docker stats`. Profiling one inference path in the container
+   found why: on ARM the convolutions run through oneDNN, whose thread pool is
+   sized from `OMP_NUM_THREADS` when it starts, so 68% of the forward pass's
+   CPU time was on threads the setting did not control. The worker now sets
+   `OMP_NUM_THREADS` before importing torch (`limit_threads` in
+   `src/surgiserve/worker.py`, tested in a fresh process); under load a
+   limited worker now runs 2 threads (main and heartbeat) at about 100% CPU.
+2. **The Mac was swapping.** The rerun was taken on an 8 GB MacBook Air with
+   12.7 GB of swap in use and, measured right after, 669-813 MB swapped out
+   per 10-20 s even with the stack stopped. Docker's VM memory is host memory,
+   so the VM was being swapped although it reported free memory. Results were
+   erratic and the run did not finish. `bench/run.py` now refuses to start
+   while the host is swapping, records host swap-outs during each run, and
+   marks affected runs invalid.
+
+What those attempts do support, with the caveat that each was measured once:
+
+- On this model PyTorch's default of one thread per CPU does not help: in one
+  container, back to back, a forward pass (with flip TTA) used about 9x the
+  CPU time at 8 threads that it did at 1 thread (1263 vs 137 ms per job), and
+  was not faster.
+- In the first run, at the default thread setting (the only rows whose label
+  was right), adding workers lowered throughput: 4.58, 3.82 and 1.63 jobs/s
+  for 1, 2 and 4 workers. The host's swap state was not recorded then, so
+  this is a direction, not a result.
 
 ## API
 

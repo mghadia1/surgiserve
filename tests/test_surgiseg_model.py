@@ -247,3 +247,61 @@ def test_the_real_checkpoint_reproduces_the_frozen_benchmark() -> None:
         expected = saved["probabilities"][index]
         np.testing.assert_allclose(actual, expected, rtol=0, atol=1e-5, err_msg=stem)
         assert np.array_equal(actual >= 0.47, expected >= 0.47), stem
+
+
+def test_the_thread_limit_reaches_openmp_in_a_fresh_process(
+    weights: tuple[Path, dict[str, str]],
+) -> None:
+    # A new interpreter, as in the worker container: the limit has to be in
+    # place before torch is first imported for OpenMP (and oneDNN) to use it.
+    import subprocess
+    import sys
+
+    directory, hashes = weights
+    script = (
+        "from pathlib import Path\n"
+        "from surgiserve.settings import Settings\n"
+        "from surgiserve.worker import build_model\n"
+        "import os, sys\n"
+        "assert 'torch' not in sys.modules\n"
+        f"build_model(Settings(model='surgiseg', torch_threads=1,"
+        f" model_checkpoint_path=Path({str(directory / 'best-model.pt')!r}),"
+        f" model_config_path=Path({str(directory / 'config.json')!r}),"
+        f" model_checkpoint_sha256={hashes['checkpoint_sha256']!r},"
+        f" model_config_sha256={hashes['config_sha256']!r}))\n"
+        "import torch\n"
+        "print(os.environ['OMP_NUM_THREADS'], torch.get_num_threads())\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        check=True,
+        # The working tree, as pytest itself uses (pyproject's pythonpath).
+        env={**os.environ, "PYTHONPATH": str(ROOT / "src")},
+    )
+
+    assert result.stdout.split() == ["1", "1"]
+
+
+def test_the_worker_applies_its_torch_thread_setting(
+    weights: tuple[Path, dict[str, str]],
+) -> None:
+    from surgiserve.settings import Settings
+    from surgiserve.worker import build_model
+
+    directory, hashes = weights
+    settings = Settings(
+        model="surgiseg",
+        model_checkpoint_path=directory / "best-model.pt",
+        model_config_path=directory / "config.json",
+        model_checkpoint_sha256=hashes["checkpoint_sha256"],
+        model_config_sha256=hashes["config_sha256"],
+        torch_threads=2,
+    )
+    before = torch.get_num_threads()
+    try:
+        build_model(settings)
+        assert torch.get_num_threads() == 2
+    finally:
+        torch.set_num_threads(before)

@@ -84,6 +84,8 @@ services:
       SURGISERVE_FAKE_MODEL_DELAY_SECONDS:
       SURGISERVE_JOB_TIMEOUT_SECONDS:
       SURGISERVE_MAX_ATTEMPTS:
+      # PyTorch threads per worker (0 or unset: one per CPU). See bench/.
+      SURGISERVE_TORCH_THREADS:
     volumes:
       # Same volume as the API: the worker reads uploads and writes masks there.
       - storage:/data/storage

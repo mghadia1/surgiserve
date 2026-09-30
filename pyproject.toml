@@ -28,6 +28,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Load testing (bench/); not needed to run or test the service.
+bench = ["locust>=2.46"]
 dev = [
   "httpx2>=2.13",
   "mypy>=2.3",
@@ -54,7 +56,7 @@ select = ["E", "F", "I", "B", "UP"]
 
 [tool.mypy]
 strict = true
-files = ["src", "tests", "migrations"]
+files = ["src", "tests", "migrations", "bench"]
 
 # surgiseg-ml ships no type information.
 [[tool.mypy.overrides]]

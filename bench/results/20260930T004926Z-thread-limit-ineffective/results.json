@@ -1,0 +1,470 @@
+{
+  "environment": {
+    "date": "2026-09-30T01:12:13+00:00",
+    "git_commit": "f6ea6c6",
+    "machine": "Mac14,2",
+    "chip": "Apple M2",
+    "cpu_cores": {
+      "performance": 4,
+      "efficiency": 4
+    },
+    "memory_gb": 8.0,
+    "macos": "26.5.2",
+    "docker_vm": {
+      "cpus": 8,
+      "memory_gb": 3.8
+    },
+    "image": {
+      "name": "ckd4ipizn000d3b5yk2vrbyyz.jpg",
+      "bytes": 219132,
+      "size": [
+        768,
+        576
+      ],
+      "sha256": "5f2336273e91d77e706c6f6c811bb09fb81b197dae6631321b60639fbc7aadf6"
+    }
+  },
+  "settings": {
+    "users": 16,
+    "warmup_s": 15,
+    "duration_s": 60,
+    "poll_s": 0.1
+  },
+  "results": [
+    {
+      "label": "1w-8t",
+      "workers": 1,
+      "torch_threads": 8,
+      "throughput_jobs_per_s": 4.58,
+      "jobs_in_window": 275,
+      "not_succeeded": 0,
+      "end_to_end_ms": {
+        "p50": 3379.5,
+        "p95": 4225.1,
+        "p99": 4408.9,
+        "mean": 3421.1
+      },
+      "queue_wait_ms": {
+        "p50": 3149.6,
+        "p95": 4026.5,
+        "p99": 4124.8,
+        "mean": 3205.0
+      },
+      "processing_ms": {
+        "p50": 193.9,
+        "p95": 364.7,
+        "p99": 488.7,
+        "mean": 216.0
+      },
+      "api": {
+        "GET /jobs/{id}": {
+          "requests": 10332,
+          "failures": 0,
+          "p50_ms": 8.0,
+          "p95_ms": 33.0
+        },
+        "POST /jobs": {
+          "requests": 349,
+          "failures": 0,
+          "p50_ms": 22.0,
+          "p95_ms": 150.0
+        }
+      },
+      "usage_midrun": {
+        "worker_cpu_percent": 402.3,
+        "workers_mem": [
+          "278.9MiB"
+        ],
+        "api_cpu_percent": 41.02
+      }
+    },
+    {
+      "label": "1w-1t",
+      "workers": 1,
+      "torch_threads": 1,
+      "throughput_jobs_per_s": 6.0,
+      "jobs_in_window": 361,
+      "not_succeeded": 0,
+      "end_to_end_ms": {
+        "p50": 2512.5,
+        "p95": 3120.7,
+        "p99": 3548.8,
+        "mean": 2580.5
+      },
+      "queue_wait_ms": {
+        "p50": 2348.6,
+        "p95": 2933.5,
+        "p99": 3362.4,
+        "mean": 2417.4
+      },
+      "processing_ms": {
+        "p50": 147.1,
+        "p95": 234.3,
+        "p99": 378.2,
+        "mean": 163.1
+      },
+      "api": {
+        "GET /jobs/{id}": {
+          "requests": 10227,
+          "failures": 0,
+          "p50_ms": 9.0,
+          "p95_ms": 34.0
+        },
+        "POST /jobs": {
+          "requests": 469,
+          "failures": 0,
+          "p50_ms": 22.0,
+          "p95_ms": 100.0
+        }
+      },
+      "usage_midrun": {
+        "worker_cpu_percent": 250.8,
+        "workers_mem": [
+          "287MiB"
+        ],
+        "api_cpu_percent": 39.33
+      }
+    },
+    {
+      "label": "2w-8t",
+      "workers": 2,
+      "torch_threads": 8,
+      "throughput_jobs_per_s": 3.82,
+      "jobs_in_window": 230,
+      "not_succeeded": 0,
+      "end_to_end_ms": {
+        "p50": 4099.4,
+        "p95": 4794.7,
+        "p99": 5042.8,
+        "mean": 4079.1
+      },
+      "queue_wait_ms": {
+        "p50": 3585.1,
+        "p95": 4234.1,
+        "p99": 4375.1,
+        "mean": 3566.5
+      },
+      "processing_ms": {
+        "p50": 476.9,
+        "p95": 813.0,
+        "p99": 1013.6,
+        "mean": 512.7
+      },
+      "api": {
+        "GET /jobs/{id}": {
+          "requests": 10078,
+          "failures": 0,
+          "p50_ms": 10.0,
+          "p95_ms": 42.0
+        },
+        "POST /jobs": {
+          "requests": 305,
+          "failures": 0,
+          "p50_ms": 32.0,
+          "p95_ms": 220.0
+        }
+      },
+      "usage_midrun": {
+        "worker_cpu_percent": 479.0,
+        "workers_mem": [
+          "286.3MiB",
+          "290.9MiB"
+        ],
+        "api_cpu_percent": 43.04
+      }
+    },
+    {
+      "label": "2w-4t",
+      "workers": 2,
+      "torch_threads": 4,
+      "throughput_jobs_per_s": 6.47,
+      "jobs_in_window": 388,
+      "not_succeeded": 0,
+      "end_to_end_ms": {
+        "p50": 2320.1,
+        "p95": 3260.3,
+        "p99": 5448.6,
+        "mean": 2493.8
+      },
+      "queue_wait_ms": {
+        "p50": 2018.9,
+        "p95": 2934.2,
+        "p99": 5130.7,
+        "mean": 2175.5
+      },
+      "processing_ms": {
+        "p50": 278.2,
+        "p95": 529.1,
+        "p99": 922.9,
+        "mean": 318.3
+      },
+      "api": {
+        "GET /jobs/{id}": {
+          "requests": 10338,
+          "failures": 0,
+          "p50_ms": 9.0,
+          "p95_ms": 30.0
+        },
+        "POST /jobs": {
+          "requests": 490,
+          "failures": 0,
+          "p50_ms": 27.0,
+          "p95_ms": 72.0
+        }
+      },
+      "usage_midrun": {
+        "worker_cpu_percent": 437.1,
+        "workers_mem": [
+          "287.9MiB",
+          "286.4MiB"
+        ],
+        "api_cpu_percent": 44.14
+      }
+    },
+    {
+      "label": "2w-1t",
+      "workers": 2,
+      "torch_threads": 1,
+      "throughput_jobs_per_s": 8.22,
+      "jobs_in_window": 494,
+      "not_succeeded": 0,
+      "end_to_end_ms": {
+        "p50": 1709.2,
+        "p95": 2554.9,
+        "p99": 5270.0,
+        "mean": 1854.6
+      },
+      "queue_wait_ms": {
+        "p50": 1488.0,
+        "p95": 2271.7,
+        "p99": 4960.7,
+        "mean": 1617.3
+      },
+      "processing_ms": {
+        "p50": 200.1,
+        "p95": 398.3,
+        "p99": 761.6,
+        "mean": 237.3
+      },
+      "api": {
+        "GET /jobs/{id}": {
+          "requests": 9745,
+          "failures": 0,
+          "p50_ms": 9.0,
+          "p95_ms": 50.0
+        },
+        "POST /jobs": {
+          "requests": 621,
+          "failures": 0,
+          "p50_ms": 26.0,
+          "p95_ms": 93.0
+        }
+      },
+      "usage_midrun": {
+        "worker_cpu_percent": 314.6,
+        "workers_mem": [
+          "269.4MiB",
+          "283.6MiB"
+        ],
+        "api_cpu_percent": 47.71
+      }
+    },
+    {
+      "label": "4w-8t",
+      "workers": 4,
+      "torch_threads": 8,
+      "throughput_jobs_per_s": 1.63,
+      "jobs_in_window": 97,
+      "not_succeeded": 0,
+      "end_to_end_ms": {
+        "p50": 8040.1,
+        "p95": 21917.5,
+        "p99": 24141.4,
+        "mean": 9507.4
+      },
+      "queue_wait_ms": {
+        "p50": 4301.8,
+        "p95": 17779.4,
+        "p99": 21116.1,
+        "mean": 7104.9
+      },
+      "processing_ms": {
+        "p50": 1489.4,
+        "p95": 7317.7,
+        "p99": 8465.0,
+        "mean": 2402.5
+      },
+      "api": {
+        "GET /jobs/{id}": {
+          "requests": 6238,
+          "failures": 0,
+          "p50_ms": 20.0,
+          "p95_ms": 350.0
+        },
+        "POST /jobs": {
+          "requests": 171,
+          "failures": 0,
+          "p50_ms": 60.0,
+          "p95_ms": 770.0
+        }
+      },
+      "usage_midrun": {
+        "worker_cpu_percent": 637.3,
+        "workers_mem": [
+          "266.3MiB",
+          "267MiB",
+          "266.9MiB",
+          "261.8MiB"
+        ],
+        "api_cpu_percent": 110.95
+      }
+    },
+    {
+      "label": "4w-2t",
+      "workers": 4,
+      "torch_threads": 2,
+      "throughput_jobs_per_s": 4.75,
+      "jobs_in_window": 284,
+      "not_succeeded": 0,
+      "end_to_end_ms": {
+        "p50": 3008.9,
+        "p95": 5140.6,
+        "p99": 5646.8,
+        "mean": 3244.3
+      },
+      "queue_wait_ms": {
+        "p50": 2193.5,
+        "p95": 3819.5,
+        "p99": 4567.5,
+        "mean": 2410.2
+      },
+      "processing_ms": {
+        "p50": 756.9,
+        "p95": 1494.1,
+        "p99": 2004.8,
+        "mean": 834.1
+      },
+      "api": {
+        "GET /jobs/{id}": {
+          "requests": 8398,
+          "failures": 0,
+          "p50_ms": 18.0,
+          "p95_ms": 120.0
+        },
+        "POST /jobs": {
+          "requests": 376,
+          "failures": 0,
+          "p50_ms": 68.0,
+          "p95_ms": 370.0
+        }
+      },
+      "usage_midrun": {
+        "worker_cpu_percent": 467.8,
+        "workers_mem": [
+          "284.2MiB",
+          "290.4MiB",
+          "287MiB",
+          "292.2MiB"
+        ],
+        "api_cpu_percent": 87.34
+      }
+    },
+    {
+      "label": "4w-1t",
+      "workers": 4,
+      "torch_threads": 1,
+      "throughput_jobs_per_s": 7.07,
+      "jobs_in_window": 425,
+      "not_succeeded": 0,
+      "end_to_end_ms": {
+        "p50": 1947.5,
+        "p95": 3472.7,
+        "p99": 4026.8,
+        "mean": 2120.0
+      },
+      "queue_wait_ms": {
+        "p50": 1417.7,
+        "p95": 2582.4,
+        "p99": 3223.2,
+        "mean": 1569.8
+      },
+      "processing_ms": {
+        "p50": 487.5,
+        "p95": 920.6,
+        "p99": 1471.4,
+        "mean": 550.2
+      },
+      "api": {
+        "GET /jobs/{id}": {
+          "requests": 8564,
+          "failures": 0,
+          "p50_ms": 18.0,
+          "p95_ms": 110.0
+        },
+        "POST /jobs": {
+          "requests": 543,
+          "failures": 0,
+          "p50_ms": 60.0,
+          "p95_ms": 280.0
+        }
+      },
+      "usage_midrun": {
+        "worker_cpu_percent": 433.0,
+        "workers_mem": [
+          "269.6MiB",
+          "279.4MiB",
+          "269.4MiB",
+          "267.2MiB"
+        ],
+        "api_cpu_percent": 77.91
+      }
+    },
+    {
+      "label": "1w-8t (repeat)",
+      "workers": 1,
+      "torch_threads": 8,
+      "throughput_jobs_per_s": 4.15,
+      "jobs_in_window": 248,
+      "not_succeeded": 0,
+      "end_to_end_ms": {
+        "p50": 3764.0,
+        "p95": 4235.3,
+        "p99": 4487.6,
+        "mean": 3770.8
+      },
+      "queue_wait_ms": {
+        "p50": 3528.7,
+        "p95": 3999.3,
+        "p99": 4238.7,
+        "mean": 3534.5
+      },
+      "processing_ms": {
+        "p50": 213.7,
+        "p95": 376.0,
+        "p99": 463.7,
+        "mean": 236.3
+      },
+      "api": {
+        "GET /jobs/{id}": {
+          "requests": 10327,
+          "failures": 0,
+          "p50_ms": 9.0,
+          "p95_ms": 32.0
+        },
+        "POST /jobs": {
+          "requests": 312,
+          "failures": 0,
+          "p50_ms": 27.0,
+          "p95_ms": 240.0
+        }
+      },
+      "usage_midrun": {
+        "worker_cpu_percent": 442.3,
+        "workers_mem": [
+          "302.8MiB"
+        ],
+        "api_cpu_percent": 49.52
+      }
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+building images
+== 1w-8t: 1 worker(s), 8 torch thread(s) each
+{"label": "1w-8t", "workers": 1, "torch_threads": 8, "throughput_jobs_per_s": 3.53, "jobs_in_window": 213, "not_succeeded": 0, "end_to_end_ms": {"p50": 4286.1, "p95": 5213.7, "p99": 5395.0, "mean": 4386.6}, "queue_wait_ms": {"p50": 4025.5, "p95": 4921.2, "p99": 5114.7, "mean": 4115.8}, "processing_ms": {"p50": 244.8, "p95": 437.5, "p99": 554.4, "mean": 270.8}, "api": {"GET /jobs/{id}": {"requests": 10093, "failures": 0, "p50_ms": 10.0, "p95_ms": 39.0}, "POST /jobs": {"requests": 268, "failures": 0, "p50_ms": 33.0, "p95_ms": 290.0}}, "usage_midrun": {"worker_cpu_percent": 420.6, "workers_mem": ["301.1MiB"], "api_cpu_percent": 42.46}}
+== 1w-1t: 1 worker(s), 1 torch thread(s) each
+{"label": "1w-1t", "workers": 1, "torch_threads": 1, "throughput_jobs_per_s": 5.1, "jobs_in_window": 306, "not_succeeded": 0, "end_to_end_ms": {"p50": 3020.2, "p95": 3438.8, "p99": 3852.5, "mean": 3054.2}, "queue_wait_ms": {"p50": 2820.9, "p95": 3249.6, "p99": 3671.7, "mean": 2861.8}, "processing_ms": {"p50": 179.5, "p95": 265.6, "p99": 346.1, "mean": 192.4}, "api": {"GET /jobs/{id}": {"requests": 10192, "failures": 0, "p50_ms": 9.0, "p95_ms": 39.0}, "POST /jobs": {"requests": 388, "failures": 0, "p50_ms": 23.0, "p95_ms": 82.0}}, "usage_midrun": {"worker_cpu_percent": 100.0, "workers_mem": ["286MiB"], "api_cpu_percent": 44.93}}
+== 2w-8t: 2 worker(s), 8 torch thread(s) each
+{"label": "2w-8t", "workers": 2, "torch_threads": 8, "throughput_jobs_per_s": 3.57, "jobs_in_window": 214, "not_succeeded": 0, "end_to_end_ms": {"p50": 4377.6, "p95": 5329.0, "p99": 5551.2, "mean": 4424.9}, "queue_wait_ms": {"p50": 3805.0, "p95": 4749.0, "p99": 4944.3, "mean": 3869.9}, "processing_ms": {"p50": 514.7, "p95": 867.1, "p99": 1148.1, "mean": 555.0}, "api": {"GET /jobs/{id}": {"requests": 9945, "failures": 0, "p50_ms": 11.0, "p95_ms": 47.0}, "POST /jobs": {"requests": 275, "failures": 0, "p50_ms": 35.0, "p95_ms": 220.0}}, "usage_midrun": {"worker_cpu_percent": 464.0, "workers_mem": ["297.9MiB", "297.8MiB"], "api_cpu_percent": 45.37}}
+== 2w-4t: 2 worker(s), 4 torch thread(s) each
+{"label": "2w-4t", "workers": 2, "torch_threads": 4, "throughput_jobs_per_s": 4.95, "jobs_in_window": 298, "not_succeeded": 0, "end_to_end_ms": {"p50": 2855.3, "p95": 5934.6, "p99": 7815.9, "mean": 3135.3}, "queue_wait_ms": {"p50": 2418.0, "p95": 5520.0, "p99": 7313.3, "mean": 2739.0}, "processing_ms": {"p50": 296.2, "p95": 1034.4, "p99": 1314.5, "mean": 396.3}, "api": {"GET /jobs/{id}": {"requests": 9064, "failures": 0, "p50_ms": 13.0, "p95_ms": 95.0}, "POST /jobs": {"requests": 407, "failures": 0, "p50_ms": 40.0, "p95_ms": 230.0}}, "usage_midrun": {"worker_cpu_percent": 381.5, "workers_mem": ["290.7MiB", "288.6MiB"], "api_cpu_percent": 61.67}}
+== 2w-1t: 2 worker(s), 1 torch thread(s) each
+{"label": "2w-1t", "workers": 2, "torch_threads": 1, "throughput_jobs_per_s": 7.23, "jobs_in_window": 434, "not_succeeded": 0, "end_to_end_ms": {"p50": 2064.9, "p95": 2703.3, "p99": 2805.0, "mean": 2116.1}, "queue_wait_ms": {"p50": 1788.8, "p95": 2394.8, "p99": 2528.8, "mean": 1848.6}, "processing_ms": {"p50": 243.6, "p95": 397.2, "p99": 539.9, "mean": 267.5}, "api": {"GET /jobs/{id}": {"requests": 9746, "failures": 0, "p50_ms": 10.0, "p95_ms": 52.0}, "POST /jobs": {"requests": 539, "failures": 0, "p50_ms": 31.0, "p95_ms": 140.0}}, "usage_midrun": {"worker_cpu_percent": 199.3, "workers_mem": ["279.7MiB", "279.4MiB"], "api_cpu_percent": 70.76}}
+== 4w-8t: 4 worker(s), 8 torch thread(s) each
+{"label": "4w-8t", "workers": 4, "torch_threads": 8, "throughput_jobs_per_s": 0.47, "jobs_in_window": 12, "not_succeeded": 0, "end_to_end_ms": {"p50": 7949.8, "p95": 9381.8, "p99": 9527.8, "mean": 8183.7}, "queue_wait_ms": {"p50": 6677.6, "p95": 7945.9, "p99": 8075.7, "mean": 6863.2}, "processing_ms": {"p50": 1381.7, "p95": 1502.6, "p99": 1509.5, "mean": 1320.5}, "api": {"GET /jobs/{id}": {"requests": 1745, "failures": 0, "p50_ms": 29.0, "p95_ms": 300.0}, "POST /jobs": {"requests": 54, "failures": 0, "p50_ms": 200.0, "p95_ms": 740.0}}, "usage_midrun": {"worker_cpu_percent": 227.7, "workers_mem": ["299.8MiB", "321.4MiB", "328.6MiB", "308.9MiB"], "api_cpu_percent": 0.37}}
+== 4w-2t: 4 worker(s), 2 torch thread(s) each
+{"label": "4w-2t", "workers": 4, "torch_threads": 2, "throughput_jobs_per_s": 1.38, "jobs_in_window": 83, "not_succeeded": 0, "end_to_end_ms": {"p50": 7061.6, "p95": 27026.7, "p99": 27223.2, "mean": 9227.5}, "queue_wait_ms": {"p50": 3256.7, "p95": 26337.3, "p99": 26514.6, "mean": 6887.1}, "processing_ms": {"p50": 690.5, "p95": 5701.5, "p99": 25298.8, "mean": 2340.4}, "api": {"GET /jobs/{id}": {"requests": 2624, "failures": 9, "p50_ms": 75.0, "p95_ms": 620.0}, "POST /jobs": {"requests": 135, "failures": 0, "p50_ms": 180.0, "p95_ms": 1500.0}}, "usage_midrun": {"worker_cpu_percent": 495.2, "workers_mem": ["288.5MiB", "284.7MiB", "277.4MiB", "277.1MiB"], "api_cpu_percent": 96.52}}
+== 4w-1t: 4 worker(s), 1 torch thread(s) each
+Traceback (most recent call last):
+  File "/Users/programming/Documents/auto job applier/projects/surgiserve/bench/run.py", line 332, in <module>
+    main()
+  File "/Users/programming/Documents/auto job applier/projects/surgiserve/bench/run.py", line 310, in main
+    result = measure(workers, threads, args, out)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/programming/Documents/auto job applier/projects/surgiserve/bench/run.py", line 121, in measure
+    sh(
+  File "/Users/programming/Documents/auto job applier/projects/surgiserve/bench/run.py", line 49, in sh
+    return subprocess.run(
+           ^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/subprocess.py", line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '('docker', 'compose', 'up', '--detach', '--wait', '--scale', 'worker=4')' returned non-zero exit status 1.

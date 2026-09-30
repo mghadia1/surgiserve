@@ -15,6 +15,7 @@ import os
 import random
 import signal
 import socket
+import sys
 import threading
 import time
 from collections.abc import Callable, Iterator
@@ -590,11 +591,37 @@ def new_worker_id() -> str:
     return f"{socket.gethostname()}-{os.getpid()}-{uuid4().hex[:8]}"
 
 
+def limit_threads(threads: int) -> None:
+    """Limit PyTorch to ``threads`` compute threads (0: leave the default).
+
+    ``torch.set_num_threads`` alone is not enough in this image: on ARM the
+    convolutions run through oneDNN, whose thread pool is sized from
+    ``OMP_NUM_THREADS`` when it first starts. Measured with the setting at 1
+    and no load: 68% of the forward pass's CPU time was on other threads, a
+    worker "limited to 1 thread" used about 2.5 CPUs. So the variable is set
+    too, and it only works if torch has not been imported yet.
+    """
+
+    if not threads:
+        return
+    if "torch" in sys.modules:
+        logger.warning(
+            "torch was imported before the thread limit was set; "
+            "OMP_NUM_THREADS will not take effect",
+            extra={"event": "worker.thread_limit_late"},
+        )
+    os.environ["OMP_NUM_THREADS"] = str(threads)
+    import torch
+
+    torch.set_num_threads(threads)
+
+
 def build_model(settings: Settings) -> SegmentationModel:
     if settings.model == "fake":
         return FakeModel(delay_seconds=settings.fake_model_delay_seconds)
-    # Imported here so the API process, which never runs the model, does not
-    # load torch.
+    limit_threads(settings.torch_threads)
+    # Imported here, after the thread limit, and only in the worker: the API
+    # process never runs the model and never loads torch.
     from .surgiseg_model import SurgisegModel
 
     # Raises if either file's hash is wrong: better not to start than to

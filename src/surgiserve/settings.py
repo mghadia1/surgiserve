@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     model_config_sha256: str = FROZEN_CONFIG_SHA256
     model_threshold: float = FROZEN_THRESHOLD
     model_flip_tta: bool = True
+    # PyTorch compute threads per worker; 0 keeps PyTorch's default (one per
+    # CPU). With several workers on one machine the default oversubscribes the
+    # CPUs; see "Load testing" in the README.
+    torch_threads: int = 0
     # Simulated inference time for the fake model, so a job is visibly
     # "running" for a moment.
     fake_model_delay_seconds: float = 0.0
