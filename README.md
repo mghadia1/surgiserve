@@ -56,8 +56,10 @@ docker compose up --detach --wait --scale worker=3
 
 Interactive API docs are at <http://localhost:8000/docs> while it runs.
 
-The image is about 1.4 GB, almost all of it CPU-only PyTorch. The first
-build downloads it; later builds reuse the layer.
+One Dockerfile builds two images: `api` (348 MB, also used by the migrate
+step) and `worker` (1.4 GB, almost all of it CPU-only PyTorch). The API never
+imports the model, so its image leaves PyTorch out; CI checks that it stays
+out. The first worker build downloads PyTorch; later builds reuse the layer.
 
 ## Architecture
 
@@ -391,7 +393,7 @@ Each with what it costs.
 | Weights outside the image, SHA-256 checked at start | No 57 MB file in git; the worker cannot serve unverified weights | Real weights must be supplied separately (`make weights`) |
 | Liveness and readiness are separate | Restarting the API would not fix a database outage | Two endpoints to understand |
 | JSON logs with context variables | One `grep <job id>` follows a job across services | A small custom formatter to maintain |
-| One image for API and worker | One build, one set of dependencies | The API image carries PyTorch it never imports (1.4 GB) |
+| Separate `api` and `worker` image targets; model dependencies are an optional extra | The API image is 348 MB instead of 1.4 GB | Two build targets; the API must never import the model code (CI checks) |
 | Synchronous handlers | Plain blocking database and file calls, run in FastAPI's thread pool | Concurrency is bounded by that pool |
 | Thread limit via `OMP_NUM_THREADS` as well as `set_num_threads` | `set_num_threads` alone does not limit oneDNN on ARM | Must be set before torch is imported |
 
@@ -433,7 +435,7 @@ covered by a test where one could be written:
 Needs Python 3.12.
 
 ```bash
-make install   # create .venv; CPU-only torch, then the package and dev tools
+make install   # create .venv; CPU-only torch, then the package, model and dev extras
 make check     # ruff, mypy --strict, pytest (starts the Compose database)
 make smoke     # start the stack, upload an image over HTTP, stop it
 ```

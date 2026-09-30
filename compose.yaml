@@ -40,7 +40,9 @@ services:
   # Runs `alembic upgrade head` once and exits. The API and worker start only
   # after it has exited successfully, so neither sees an unmigrated schema.
   migrate:
-    build: .
+    build:
+      context: .
+      target: api
     command: ["alembic", "upgrade", "head"]
     environment:
       SURGISERVE_DATABASE_URL: *database-url
@@ -49,7 +51,9 @@ services:
         condition: service_healthy
 
   api:
-    build: .
+    build:
+      context: .
+      target: api
     ports:
       - "8000:8000"
     environment:
@@ -66,8 +70,9 @@ services:
     restart: unless-stopped
 
   worker:
-    build: .
-    command: ["python", "-m", "surgiserve.worker"]
+    build:
+      context: .
+      target: worker
     environment:
       SURGISERVE_DATABASE_URL: *database-url
       SURGISERVE_REDIS_URL: *redis-url
@@ -96,14 +101,6 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
-    # Healthy while the worker's main loop keeps touching its liveness file.
-    # The start period covers loading torch and the model.
-    healthcheck:
-      test: ["CMD", "python", "-m", "surgiserve.healthcheck", "worker"]
-      interval: 10s
-      timeout: 3s
-      start_period: 30s
-      retries: 3
     restart: unless-stopped
 
 volumes:
