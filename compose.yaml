@@ -89,8 +89,11 @@ services:
       SURGISERVE_FAKE_MODEL_DELAY_SECONDS:
       SURGISERVE_JOB_TIMEOUT_SECONDS:
       SURGISERVE_MAX_ATTEMPTS:
-      # PyTorch threads per worker (0 or unset: one per CPU). See bench/.
-      SURGISERVE_TORCH_THREADS:
+      # PyTorch threads per worker; 0 means PyTorch's default of one per CPU.
+      # Default 1: on the benchmark machine, 4 workers x 1 thread ran 2.8x the
+      # jobs/s of 4 workers at the default (README, "Load testing"). Scale
+      # with more workers rather than more threads.
+      SURGISERVE_TORCH_THREADS: ${SURGISERVE_TORCH_THREADS:-1}
     volumes:
       # Same volume as the API: the worker reads uploads and writes masks there.
       - storage:/data/storage

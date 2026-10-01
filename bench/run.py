@@ -13,14 +13,20 @@ computes from Postgres timestamps:
   finished).
 
 The first ``--warmup`` seconds of each run are excluded (model warm-up,
-filling the queue). The first configuration is run again at the end to
-detect drift: a fanless laptop slows down as it heats up.
+filling the queue).
 
-On macOS the Docker VM's memory is ordinary host memory, so if the Mac is
-swapping, the VM is too, even when the VM reports free memory. The runner
-therefore refuses to start while the host is swapping, records how much the
-host swapped out during each run, and flags any run where it did: those
-numbers measure the disk, not the service.
+Drift: a fanless laptop slows down as it heats up, and macOS records no
+thermal warning when it does. So every configuration runs twice, once in a
+forward pass and once in a reverse pass (A B C ... C B A), with a cool-down
+between runs. A steady drift then affects each configuration's average about
+equally, and the gap between its two runs shows the noise.
+
+Swapping: on macOS the Docker VM's memory is ordinary host memory, so if the
+Mac swaps, the VM's pages can be on disk even when the VM reports free memory.
+The runner refuses to start while the host is swapping, and records the
+host's swap-outs and swap-ins during each run. A run is marked invalid on
+swap-ins, not swap-outs: writing idle pages out need not slow anything down,
+but reading pages back in means something was waiting on the disk.
 
 Writes bench/results/<timestamp>/results.json and a Markdown table.
 """
@@ -57,25 +63,30 @@ def sh(*command: str, env: dict[str, str] | None = None) -> str:
     ).stdout
 
 
-# More than this swapped out by the host during a run marks the run invalid.
+# More than this swapped back in by the host during a run marks it invalid;
+# more than this swapped out in the 10 s before starting stops the runner.
 SWAP_TOLERANCE_MB = 50.0
 
 
-def host_swapped_out_mb() -> float:
-    """Megabytes the Mac has swapped out since boot (from vm_stat)."""
+def host_swap_mb() -> tuple[float, float]:
+    """Megabytes the Mac has swapped (out, in) since boot, from vm_stat."""
 
     output = sh("vm_stat")
     page_size = int(output.split("page size of ")[1].split(" bytes")[0])
+    counts = {}
     for line in output.splitlines():
-        if line.startswith("Swapouts:"):
-            return int(line.split()[-1].rstrip(".")) * page_size / 2**20
-    raise RuntimeError("vm_stat reported no Swapouts line")
+        name, _, value = line.partition(":")
+        if name in ("Swapouts", "Swapins"):
+            counts[name] = int(value.strip().rstrip(".")) * page_size / 2**20
+    return counts["Swapouts"], counts["Swapins"]
 
 
 def swap_rate_mb(seconds: float = 10.0) -> float:
-    before = host_swapped_out_mb()
+    """Megabytes swapped out over the next ``seconds``."""
+
+    before, _ = host_swap_mb()
     time.sleep(seconds)
-    return host_swapped_out_mb() - before
+    return host_swap_mb()[0] - before
 
 
 def ready() -> dict[str, Any]:
@@ -137,9 +148,10 @@ def container_usage() -> dict[str, Any]:
 
 
 def measure(
-    workers: int, threads: int, args: argparse.Namespace, out: Path
+    workers: int, threads: int, args: argparse.Namespace, out: Path, run_pass: int
 ) -> dict[str, Any]:
-    label = f"{workers}w-{threads}t"
+    config = f"{workers}w-{threads}t"
+    label = f"{config}-pass{run_pass}"
     print(
         f"== {label}: {workers} worker(s), {threads} torch thread(s) each", flush=True
     )
@@ -160,7 +172,7 @@ def measure(
     engine = create_engine(DATABASE_URL)
     with engine.connect() as connection:
         started = connection.scalar(text("SELECT now()"))
-    swapped_before = host_swapped_out_mb()
+    out_before, in_before = host_swap_mb()
     locust = subprocess.Popen(
         [
             sys.executable,
@@ -189,7 +201,7 @@ def measure(
     time.sleep(args.warmup + args.duration / 2)
     usage = container_usage()
     locust.wait()
-    host_swapped = round(host_swapped_out_mb() - swapped_before, 1)
+    out_after, in_after = host_swap_mb()
 
     # Let jobs still in flight finish, so latency covers every job created in
     # the window, including the slowest.
@@ -249,6 +261,8 @@ def measure(
                 }
     result = {
         "label": label,
+        "config": config,
+        "pass": run_pass,
         "workers": workers,
         "torch_threads": threads,
         "throughput_jobs_per_s": round(finished_in_window / args.duration, 2),
@@ -259,8 +273,9 @@ def measure(
         "processing_ms": percentiles([float(row.proc) for row in succeeded]),
         "api": api,
         "usage_midrun": usage,
-        "host_swapped_out_mb": host_swapped,
-        "valid": host_swapped <= SWAP_TOLERANCE_MB,
+        "host_swapped_out_mb": round(out_after - out_before, 1),
+        "host_swapped_in_mb": round(in_after - in_before, 1),
+        "valid": in_after - in_before <= SWAP_TOLERANCE_MB,
     }
     print(json.dumps(result), flush=True)
     return result
@@ -294,24 +309,64 @@ def environment(image: Path) -> dict[str, Any]:
     }
 
 
-def table(results: list[dict[str, Any]]) -> str:
+def runs_table(results: list[dict[str, Any]]) -> str:
     lines = [
-        "| Run | Workers | Threads each | Jobs/s | End to end p50 / p95 (ms) "
-        "| Processing p50 / p95 (ms) | POST /jobs p95 (ms) | Worker CPU % "
-        "| Host swap-out (MB) |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "| Run | Jobs/s | End to end p50 / p95 (ms) | Processing p50 / p95 (ms) "
+        "| POST /jobs p95 (ms) | Worker CPU % | Host swap out / in (MB) | Valid |",
+        "|---|---|---|---|---|---|---|---|",
     ]
     for result in results:
         e2e, proc = result["end_to_end_ms"], result["processing_ms"]
         lines.append(
-            f"| {result['label']} | {result['workers']} | {result['torch_threads']} "
-            f"| {result['throughput_jobs_per_s']} "
+            f"| {result['label']} | {result['throughput_jobs_per_s']} "
             f"| {e2e.get('p50')} / {e2e.get('p95')} "
             f"| {proc.get('p50')} / {proc.get('p95')} "
             f"| {result['api'].get('POST /jobs', {}).get('p95_ms')} "
             f"| {result['usage_midrun']['worker_cpu_percent']} "
-            f"| {result['host_swapped_out_mb']}"
-            f"{'' if result['valid'] else ' (INVALID: host swapping)'} |"
+            f"| {result['host_swapped_out_mb']} / {result['host_swapped_in_mb']} "
+            f"| {'yes' if result['valid'] else 'NO'} |"
+        )
+    return "\n".join(lines) + "\n"
+
+
+def summary(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Per configuration: both passes, their mean, and the gap between them."""
+
+    rows = []
+    for config in dict.fromkeys(result["config"] for result in results):
+        runs = [result for result in results if result["config"] == config]
+        rates = [run["throughput_jobs_per_s"] for run in runs]
+        mean = statistics.fmean(rates)
+        rows.append(
+            {
+                "config": config,
+                "workers": runs[0]["workers"],
+                "torch_threads": runs[0]["torch_threads"],
+                "jobs_per_s_by_pass": rates,
+                "jobs_per_s_mean": round(mean, 2),
+                "pass_gap_percent": round((max(rates) - min(rates)) / mean * 100, 1),
+                "processing_p50_ms_mean": round(
+                    statistics.fmean(run["processing_ms"]["p50"] for run in runs), 1
+                ),
+                "all_valid": all(run["valid"] for run in runs),
+            }
+        )
+    return rows
+
+
+def summary_table(rows: list[dict[str, Any]]) -> str:
+    lines = [
+        "| Workers | Threads each | Jobs/s (pass 1, pass 2) | Mean jobs/s "
+        "| Gap between passes | Processing p50 (ms, mean) | Both runs valid |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for row in rows:
+        rates = ", ".join(str(rate) for rate in row["jobs_per_s_by_pass"])
+        lines.append(
+            f"| {row['workers']} | {row['torch_threads']} | {rates} "
+            f"| {row['jobs_per_s_mean']} | {row['pass_gap_percent']}% "
+            f"| {row['processing_p50_ms_mean']} "
+            f"| {'yes' if row['all_valid'] else 'NO'} |"
         )
     return "\n".join(lines) + "\n"
 
@@ -324,6 +379,9 @@ def main() -> None:
     parser.add_argument("--users", type=int, default=16)
     parser.add_argument(
         "--only", help="comma-separated labels such as 1w-8t,4w-2t (default: all)"
+    )
+    parser.add_argument(
+        "--cooldown", type=int, default=30, help="seconds idle between runs"
     )
     parser.add_argument(
         "--allow-swapping",
@@ -351,27 +409,40 @@ def main() -> None:
 
     print("building images", flush=True)
     sh("docker", "compose", "build")
-    runs = [*configurations, configurations[0]]  # repeat the first: drift check
+    # Forward, then reverse: steady drift affects each configuration's mean
+    # about equally.
+    runs = [(c, 1) for c in configurations] + [(c, 2) for c in reversed(configurations)]
     results = []
-    for index, (workers, threads) in enumerate(runs):
-        result = measure(workers, threads, args, out)
-        if index == len(runs) - 1 and len(runs) > 1:
-            result["label"] += " (repeat)"
-        results.append(result)
+    for index, ((workers, threads), run_pass) in enumerate(runs):
+        if index:
+            sh("docker", "compose", "down", "--volumes", "--timeout", "5")
+            time.sleep(args.cooldown)
+        results.append(measure(workers, threads, args, out, run_pass))
+    sh("docker", "compose", "down", "--volumes", "--timeout", "5")
+    rows = summary(results)
 
-    summary = {
+    record = {
         "environment": environment(args.image),
         "settings": {
             "users": args.users,
             "warmup_s": args.warmup,
             "duration_s": args.duration,
+            "cooldown_s": args.cooldown,
+            "order": "forward pass, then reverse pass",
             "poll_s": float(os.environ.get("BENCH_POLL_SECONDS", "0.1")),
         },
+        "summary": rows,
         "results": results,
     }
-    (out / "results.json").write_text(json.dumps(summary, indent=2) + "\n")
-    (out / "results.md").write_text(table(results))
-    print(table(results))
+    (out / "results.json").write_text(json.dumps(record, indent=2) + "\n")
+    (out / "results.md").write_text(
+        "## By configuration\n\n"
+        + summary_table(rows)
+        + "\n## Every run\n\n"
+        + runs_table(results)
+    )
+    print(summary_table(rows))
+    print(runs_table(results))
     print(f"written to {out}")
 
 

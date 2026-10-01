@@ -22,8 +22,8 @@ queue, a database, workers, failure handling and load testing.
 | 3 | Real inference with the surgiseg-ml checkpoint, masks and result links | Done |
 | 4 | Retries with backoff, timeouts, dead-letter queue, worker crash recovery | Done |
 | 5 | Structured JSON logs and a deep `/health` check | Done |
-| 6 | Locust load test with 1, 2 and 4 workers | Tooling built; **no clean measurement yet** (see Load testing) |
-| 7 | Architecture diagram, design decisions, benchmarks | Diagram and decisions written; benchmarks wait on Milestone 6 |
+| 6 | Locust load test with 1, 2 and 4 workers | Measured (see Load testing); waiting on CI |
+| 7 | Architecture diagram, design decisions, benchmarks | Written; waiting on CI |
 
 The worker runs the real network: the frozen ResNet-18 U-Net from
 surgiseg-ml (run of 2026-08-03, Dice 0.9226 on Kvasir-Instrument's 118-image
@@ -273,50 +273,93 @@ Requests to `/health*` are logged at DEBUG, since Docker polls them.
 
 ## Load testing
 
-`bench/run.py` drives a closed-loop Locust load (`bench/locustfile.py`: 16
-users, each uploads a real 768x576 Kvasir-Instrument test frame, waits for its
-job, and uploads the next) against 1, 2 and 4 workers at several PyTorch
-thread settings. Each configuration starts from empty volumes, warms up for
-15 s and is measured for 60 s. Throughput and latency come from the job
-timestamps in Postgres, not from Locust's polling; Locust supplies the API's
-own response times. The first configuration is repeated at the end to detect
-drift.
+**Result:** on one 8-core laptop, scaling comes from adding workers at one
+PyTorch thread each, not from PyTorch's threads. Four single-thread workers
+completed **12.4 jobs/s**, 2.8x the 4.4 jobs/s of four workers at PyTorch's
+default, which is no faster than one worker.
+
+| Workers | PyTorch default (8 threads each) | 1 thread each | Even split (8 / workers) |
+|---|---|---|---|
+| 1 | 4.50 jobs/s (208 ms) | 5.28 jobs/s (181 ms) | — |
+| 2 | 3.96 jobs/s (462 ms) | 8.87 jobs/s (215 ms) | 8.06 jobs/s (222 ms) |
+| 4 | 4.36 jobs/s (853 ms) | **12.41 jobs/s (299 ms)** | 11.60 jobs/s (310 ms) |
+
+Jobs completed per second, mean of two runs, with the median time a job spent
+in the worker (decode, model with flip TTA, resize, PNG, write) in brackets.
+Raw data: `bench/results/20261001T031405Z/`.
+
+What the numbers say:
+
+- **At the default, more workers do not help.** Throughput stays near 4-4.5
+  jobs/s while each job's processing time climbs from 208 to 462 to 853 ms:
+  8, 16, then 32 compute threads competing for 8 CPUs.
+- **At one thread per worker, workers scale:** 1.7x with 2, 2.35x with 4.
+  Not linear: processing time still rises from 181 to 299 ms. The likely
+  reasons, not separated here, are that half of the M2's cores are efficiency
+  cores, and that the API, Postgres, Redis and the load generator share the
+  same 8 CPUs.
+- **Even for one worker, one thread is better:** a little more throughput
+  (5.28 vs 4.50) for under a quarter of the CPU (100% vs about 460% in
+  `docker stats`). Likely because the model's input is small (128x128), so
+  splitting each operation across 8 threads costs more than it saves; that
+  explanation was not tested separately.
+- Compose therefore defaults to `SURGISERVE_TORCH_THREADS=1`.
+
+**How it was measured.** `bench/run.py` drives a closed-loop Locust load
+(`bench/locustfile.py`): 16 users, each uploading the same real 768x576
+Kvasir-Instrument test frame, waiting for its job, then uploading the next.
+Every configuration starts from empty volumes, warms up for 15 s and is
+measured for 60 s. Throughput and processing time come from the job
+timestamps in Postgres, not from Locust's polling. Each configuration ran
+twice, in a forward and then a reverse pass with 30 s cool-downs, so that a
+steady slowdown (a fanless laptop warming up) affects each configuration's
+mean about equally.
+
+- **Quality of the run:** 16 of 16 runs valid (the host read back at most 46
+  MB from swap during any run); 0 failed jobs among the 7,083 measured (9,233
+  submitted, counting warm-ups) and 0 failed requests among 165,416. The two
+  runs of each configuration agree within 7%, except one worker at the
+  default (19%): it ran first and last, where drift is largest, and the
+  earlier single-pass run showed the same slowdown on it.
+- **End-to-end latency is not reported as a result.** In a closed loop it
+  follows from the throughput (Little's law: about 16 users / jobs per
+  second), and the measured means match that within 10%. With 4 single-thread
+  workers it was 1.1-1.2 s at the median, mostly queueing behind the other
+  users' jobs.
+- **API response times under this load:** `GET /jobs/{id}` p95 35-67 ms and
+  `POST /jobs` p95 57-260 ms across all runs.
+- **Machine:** MacBook Air M2 (4 performance + 4 efficiency cores, 8 GB),
+  Docker Desktop VM with 8 CPUs and 3.8 GiB; image commit 958034f; worker
+  memory 273-304 MB each.
+
+**Limits.** One laptop, one image size, one model; the load generator runs
+on the same machine as the service; each configuration ran twice, not more.
+These numbers describe this setup, not a server.
+
+**Three earlier attempts were unusable** and are kept in `bench/results/`,
+each with a `NOTE.md`:
+
+1. *The thread limit did not work.* With `torch.set_num_threads` alone, a
+   worker "limited to 1 thread" showed 250% CPU. Profiling found that on ARM
+   the convolutions run through oneDNN, whose pool is sized from
+   `OMP_NUM_THREADS` when it starts: 68% of the forward pass's CPU time was
+   on threads the setting did not control. The worker now sets
+   `OMP_NUM_THREADS` before importing torch (`limit_threads`); a limited
+   worker now runs at about 100% CPU.
+2. *The Mac was swapping* (12.7 GB of swap in use, up to 813 MB swapped out
+   per 20 s with the stack stopped). Docker's VM memory is host memory, so
+   the VM was being swapped although it reported free memory. The runner now
+   refuses to start while the host swaps.
+3. *A single pass drifted.* After other apps were quit, a one-pass run
+   completed, but its repeat of the first configuration was 16% slower than
+   the first run, and swap-ins (what would actually stall the service) were
+   not recorded. That led to the two-pass design and to judging validity on
+   swap-ins.
 
 ```bash
 .venv/bin/python -m pip install -e '.[bench]'
-.venv/bin/python bench/run.py --image path/to/frame.jpg
+.venv/bin/python bench/run.py --image path/to/frame.jpg   # about 45 minutes
 ```
-
-**Status: there is no clean full run yet.** Two attempts are kept in
-`bench/results/`, each with a `NOTE.md` saying why it is not usable:
-
-1. **The thread limit did not work.** The first run limited threads with
-   `torch.set_num_threads` only. A worker "limited to 1 thread" then showed
-   250% CPU in `docker stats`. Profiling one inference path in the container
-   found why: on ARM the convolutions run through oneDNN, whose thread pool is
-   sized from `OMP_NUM_THREADS` when it starts, so 68% of the forward pass's
-   CPU time was on threads the setting did not control. The worker now sets
-   `OMP_NUM_THREADS` before importing torch (`limit_threads` in
-   `src/surgiserve/worker.py`, tested in a fresh process); under load a
-   limited worker now runs 2 threads (main and heartbeat) at about 100% CPU.
-2. **The Mac was swapping.** The rerun was taken on an 8 GB MacBook Air with
-   12.7 GB of swap in use and, measured right after, 669-813 MB swapped out
-   per 10-20 s even with the stack stopped. Docker's VM memory is host memory,
-   so the VM was being swapped although it reported free memory. Results were
-   erratic and the run did not finish. `bench/run.py` now refuses to start
-   while the host is swapping, records host swap-outs during each run, and
-   marks affected runs invalid.
-
-What those attempts do support, with the caveat that each was measured once:
-
-- On this model PyTorch's default of one thread per CPU does not help: in one
-  container, back to back, a forward pass (with flip TTA) used about 9x the
-  CPU time at 8 threads that it did at 1 thread (1263 vs 137 ms per job), and
-  was not faster.
-- In the first run, at the default thread setting (the only rows whose label
-  was right), adding workers lowered throughput: 4.58, 3.82 and 1.63 jobs/s
-  for 1, 2 and 4 workers. The host's swap state was not recorded then, so
-  this is a direction, not a result.
 
 ## API
 
@@ -396,6 +439,7 @@ Each with what it costs.
 | Separate `api` and `worker` image targets; model dependencies are an optional extra | The API image is 348 MB instead of 1.4 GB | Two build targets; the API must never import the model code (CI checks) |
 | Synchronous handlers | Plain blocking database and file calls, run in FastAPI's thread pool | Concurrency is bounded by that pool |
 | Thread limit via `OMP_NUM_THREADS` as well as `set_num_threads` | `set_num_threads` alone does not limit oneDNN on ARM | Must be set before torch is imported |
+| One PyTorch thread per worker by default; scale with workers | Measured: 4 x 1 thread ran 2.8x the jobs/s of 4 x 8 threads on 8 CPUs | Measured on one laptop; a bigger model or input might favour more threads per worker |
 
 ## Failures found while building it
 
@@ -426,9 +470,10 @@ covered by a test where one could be written:
 7. **`torch.set_num_threads(1)` did not limit the model to one thread.** On ARM
    oneDNN sizes its pool from `OMP_NUM_THREADS`; a "1 thread" worker used 2.5
    CPUs. (Milestone 6, found in `docker stats`, confirmed by profiling.)
-8. **A benchmark run measured the laptop's swap, not the service.** The runner
-   now refuses to start while the host swaps and flags runs that did.
-   (Milestone 6.)
+8. **Benchmark runs measured the laptop, not the service.** First swap, then
+   a 16% warm-up drift. The runner now refuses to start while the host
+   swaps, judges each run on swap-ins, and runs every configuration in a
+   forward and a reverse pass. (Milestone 6.)
 
 ## Development
 

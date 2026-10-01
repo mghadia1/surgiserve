@@ -1,0 +1,999 @@
+{
+  "environment": {
+    "date": "2026-10-01T03:45:54+00:00",
+    "git_commit": "958034f",
+    "machine": "Mac14,2",
+    "chip": "Apple M2",
+    "cpu_cores": {
+      "performance": 4,
+      "efficiency": 4
+    },
+    "memory_gb": 8.0,
+    "macos": "26.5.2",
+    "docker_vm": {
+      "cpus": 8,
+      "memory_gb": 3.8
+    },
+    "image": {
+      "name": "ckd4ipizn000d3b5yk2vrbyyz.jpg",
+      "bytes": 219132,
+      "size": [
+        768,
+        576
+      ],
+      "sha256": "5f2336273e91d77e706c6f6c811bb09fb81b197dae6631321b60639fbc7aadf6"
+    }
+  },
+  "settings": {
+    "users": 16,
+    "warmup_s": 15,
+    "duration_s": 60,
+    "cooldown_s": 30,
+    "order": "forward pass, then reverse pass",
+    "poll_s": 0.1
+  },
+  "summary": [
+    {
+      "config": "1w-8t",
+      "workers": 1,
+      "torch_threads": 8,
+      "jobs_per_s_by_pass": [
+        4.93,
+        4.07
+      ],
+      "jobs_per_s_mean": 4.5,
+      "pass_gap_percent": 19.1,
+      "processing_p50_ms_mean": 208.0,
+      "all_valid": true
+    },
+    {
+      "config": "1w-1t",
+      "workers": 1,
+      "torch_threads": 1,
+      "jobs_per_s_by_pass": [
+        5.17,
+        5.38
+      ],
+      "jobs_per_s_mean": 5.28,
+      "pass_gap_percent": 4.0,
+      "processing_p50_ms_mean": 181.4,
+      "all_valid": true
+    },
+    {
+      "config": "2w-8t",
+      "workers": 2,
+      "torch_threads": 8,
+      "jobs_per_s_by_pass": [
+        4.0,
+        3.92
+      ],
+      "jobs_per_s_mean": 3.96,
+      "pass_gap_percent": 2.0,
+      "processing_p50_ms_mean": 461.6,
+      "all_valid": true
+    },
+    {
+      "config": "2w-4t",
+      "workers": 2,
+      "torch_threads": 4,
+      "jobs_per_s_by_pass": [
+        8.07,
+        8.05
+      ],
+      "jobs_per_s_mean": 8.06,
+      "pass_gap_percent": 0.2,
+      "processing_p50_ms_mean": 222.0,
+      "all_valid": true
+    },
+    {
+      "config": "2w-1t",
+      "workers": 2,
+      "torch_threads": 1,
+      "jobs_per_s_by_pass": [
+        9.15,
+        8.58
+      ],
+      "jobs_per_s_mean": 8.87,
+      "pass_gap_percent": 6.4,
+      "processing_p50_ms_mean": 215.4,
+      "all_valid": true
+    },
+    {
+      "config": "4w-8t",
+      "workers": 4,
+      "torch_threads": 8,
+      "jobs_per_s_by_pass": [
+        4.33,
+        4.38
+      ],
+      "jobs_per_s_mean": 4.36,
+      "pass_gap_percent": 1.1,
+      "processing_p50_ms_mean": 853.4,
+      "all_valid": true
+    },
+    {
+      "config": "4w-2t",
+      "workers": 4,
+      "torch_threads": 2,
+      "jobs_per_s_by_pass": [
+        11.2,
+        12.0
+      ],
+      "jobs_per_s_mean": 11.6,
+      "pass_gap_percent": 6.9,
+      "processing_p50_ms_mean": 309.6,
+      "all_valid": true
+    },
+    {
+      "config": "4w-1t",
+      "workers": 4,
+      "torch_threads": 1,
+      "jobs_per_s_by_pass": [
+        12.23,
+        12.58
+      ],
+      "jobs_per_s_mean": 12.41,
+      "pass_gap_percent": 2.8,
+      "processing_p50_ms_mean": 299.1,
+      "all_valid": true
+    }
+  ],
+  "results": [
+    {
+      "label": "1w-8t-pass1",
+      "config": "1w-8t",
+      "pass": 1,
+      "workers": 1,
+      "torch_threads": 8,
+      "throughput_jobs_per_s": 4.93,
+      "jobs_in_window": 295,
+      "not_succeeded": 0,
+      "end_to_end_ms": {
+        "p50": 3131.2,
+        "p95": 3785.6,
+        "p99": 4039.4,
+        "mean": 3181.9
+      },
+      "queue_wait_ms": {
+        "p50": 2936.6,
+        "p95": 3568.2,
+        "p99": 3795.4,
+        "mean": 2980.0
+      },
+      "processing_ms": {
+        "p50": 186.2,
+        "p95": 297.0,
+        "p99": 330.2,
+        "mean": 201.9
+      },
+      "api": {
+        "GET /jobs/{id}": {
+          "requests": 10046,
+          "failures": 0,
+          "p50_ms": 11.0,
+          "p95_ms": 35.0
+        },
+        "POST /jobs": {
+          "requests": 381,
+          "failures": 0,
+          "p50_ms": 23.0,
+          "p95_ms": 64.0
+        }
+      },
+      "usage_midrun": {
+        "worker_cpu_percent": 471.7,
+        "workers_mem": [
+          "303.9MiB"
+        ],
+        "api_cpu_percent": 39.43
+      },
+      "host_swapped_out_mb": 27.0,
+      "host_swapped_in_mb": 28.4,
+      "valid": true
+    },
+    {
+      "label": "1w-1t-pass1",
+      "config": "1w-1t",
+      "pass": 1,
+      "workers": 1,
+      "torch_threads": 1,
+      "throughput_jobs_per_s": 5.17,
+      "jobs_in_window": 311,
+      "not_succeeded": 0,
+      "end_to_end_ms": {
+        "p50": 2987.3,
+        "p95": 3276.1,
+        "p99": 3337.0,
+        "mean": 3010.9
+      },
+      "queue_wait_ms": {
+        "p50": 2793.8,
+        "p95": 3080.7,
+        "p99": 3151.5,
+        "mean": 2820.3
+      },
+      "processing_ms": {
+        "p50": 185.6,
+        "p95": 231.5,
+        "p99": 259.5,
+        "mean": 190.6
+      },
+      "api": {
+        "GET /jobs/{id}": {
+          "requests": 10020,
+          "failures": 0,
+          "p50_ms": 11.0,
+          "p95_ms": 38.0
+        },
+        "POST /jobs": {
+          "requests": 412,
+          "failures": 0,
+          "p50_ms": 22.0,
+          "p95_ms": 65.0
+        }
+      },
+      "usage_midrun": {
+        "worker_cpu_percent": 100.3,
+        "workers_mem": [
+          "287.1MiB"
+        ],
+        "api_cpu_percent": 55.43
+      },
+      "host_swapped_out_mb": 0.0,
+      "host_swapped_in_mb": 23.2,
+      "valid": true
+    },
+    {
+      "label": "2w-8t-pass1",
+      "config": "2w-8t",
+      "pass": 1,
+      "workers": 2,
+      "torch_threads": 8,
+      "throughput_jobs_per_s": 4.0,
+      "jobs_in_window": 240,
+      "not_succeeded": 0,
+      "end_to_end_ms": {
+        "p50": 3925.7,
+        "p95": 4414.7,
+        "p99": 4508.3,
+        "mean": 3921.9
+      },
+      "queue_wait_ms": {
+        "p50": 3419.3,
+        "p95": 3890.2,
+        "p99": 4018.4,
+        "mean": 3427.3
+      },
+      "processing_ms": {
+        "p50": 457.0,
+        "p95": 688.5,
+        "p99": 957.3,
+        "mean": 494.7
+      },
+      "api": {
+        "GET /jobs/{id}": {
+          "requests": 9942,
+          "failures": 0,
+          "p50_ms": 11.0,
+          "p95_ms": 43.0
+        },
+        "POST /jobs": {
+          "requests": 326,
+          "failures": 0,
+          "p50_ms": 33.0,
+          "p95_ms": 140.0
+        }
+      },
+      "usage_midrun": {
+        "worker_cpu_percent": 458.1,
+        "workers_mem": [
+          "285.2MiB",
+          "291.4MiB"
+        ],
+        "api_cpu_percent": 47.39
+      },
+      "host_swapped_out_mb": 35.6,
+      "host_swapped_in_mb": 27.7,
+      "valid": true
+    },
+    {
+      "label": "2w-4t-pass1",
+      "config": "2w-4t",
+      "pass": 1,
+      "workers": 2,
+      "torch_threads": 4,
+      "throughput_jobs_per_s": 8.07,
+      "jobs_in_window": 485,
+      "not_succeeded": 0,
+      "end_to_end_ms": {
+        "p50": 1817.6,
+        "p95": 2396.2,
+        "p99": 2582.0,
+        "mean": 1894.1
+      },
+      "queue_wait_ms": {
+        "p50": 1572.8,
+        "p95": 2110.2,
+        "p99": 2324.9,
+        "mean": 1652.1
+      },
+      "processing_ms": {
+        "p50": 220.4,
+        "p95": 397.6,
+        "p99": 530.4,
+        "mean": 242.0
+      },
+      "api": {
+        "GET /jobs/{id}": {
+          "requests": 9964,
+          "failures": 0,
+          "p50_ms": 11.0,
+          "p95_ms": 37.0
+        },
+        "POST /jobs": {
+          "requests": 636,
+          "failures": 0,
+          "p50_ms": 31.0,
+          "p95_ms": 72.0
+        }
+      },
+      "usage_midrun": {
+        "worker_cpu_percent": 356.2,
+        "workers_mem": [
+          "292.1MiB",
+          "292.3MiB"
+        ],
+        "api_cpu_percent": 53.68
+      },
+      "host_swapped_out_mb": 56.2,
+      "host_swapped_in_mb": 29.6,
+      "valid": true
+    },
+    {
+      "label": "2w-1t-pass1",
+      "config": "2w-1t",
+      "pass": 1,
+      "workers": 2,
+      "torch_threads": 1,
+      "throughput_jobs_per_s": 9.15,
+      "jobs_in_window": 549,
+      "not_succeeded": 0,
+      "end_to_end_ms": {
+        "p50": 1661.0,
+        "p95": 1952.2,
+        "p99": 2043.6,
+        "mean": 1665.5
+      },
+      "queue_wait_ms": {
+        "p50": 1446.4,
+        "p95": 1720.0,
+        "p99": 1824.5,
+        "mean": 1450.6
+      },
+      "processing_ms": {
+        "p50": 208.9,
+        "p95": 270.2,
+        "p99": 319.1,
+        "mean": 214.9
+      },
+      "api": {
+        "GET /jobs/{id}": {
+          "requests": 10022,
+          "failures": 0,
+          "p50_ms": 10.0,
+          "p95_ms": 35.0
+        },
+        "POST /jobs": {
+          "requests": 709,
+          "failures": 0,
+          "p50_ms": 25.0,
+          "p95_ms": 71.0
+        }
+      },
+      "usage_midrun": {
+        "worker_cpu_percent": 197.1,
+        "workers_mem": [
+          "274.4MiB",
+          "287.3MiB"
+        ],
+        "api_cpu_percent": 55.55
+      },
+      "host_swapped_out_mb": 0.0,
+      "host_swapped_in_mb": 22.3,
+      "valid": true
+    },
+    {
+      "label": "4w-8t-pass1",
+      "config": "4w-8t",
+      "pass": 1,
+      "workers": 4,
+      "torch_threads": 8,
+      "throughput_jobs_per_s": 4.33,
+      "jobs_in_window": 260,
+      "not_succeeded": 0,
+      "end_to_end_ms": {
+        "p50": 3481.9,
+        "p95": 4227.8,
+        "p99": 4396.2,
+        "mean": 3583.8
+      },
+      "queue_wait_ms": {
+        "p50": 2575.2,
+        "p95": 3318.0,
+        "p99": 3425.4,
+        "mean": 2672.5
+      },
+      "processing_ms": {
+        "p50": 859.4,
+        "p95": 1249.4,
+        "p99": 1598.3,
+        "mean": 911.3
+      },
+      "api": {
+        "GET /jobs/{id}": {
+          "requests": 9770,
+          "failures": 0,
+          "p50_ms": 12.0,
+          "p95_ms": 49.0
+        },
+        "POST /jobs": {
+          "requests": 340,
+          "failures": 0,
+          "p50_ms": 38.0,
+          "p95_ms": 160.0
+        }
+      },
+      "usage_midrun": {
+        "worker_cpu_percent": 531.2,
+        "workers_mem": [
+          "286.4MiB",
+          "275.3MiB",
+          "276.7MiB",
+          "315.5MiB"
+        ],
+        "api_cpu_percent": 40.0
+      },
+      "host_swapped_out_mb": 0.0,
+      "host_swapped_in_mb": 29.0,
+      "valid": true
+    },
+    {
+      "label": "4w-2t-pass1",
+      "config": "4w-2t",
+      "pass": 1,
+      "workers": 4,
+      "torch_threads": 2,
+      "throughput_jobs_per_s": 11.2,
+      "jobs_in_window": 673,
+      "not_succeeded": 0,
+      "end_to_end_ms": {
+        "p50": 1221.1,
+        "p95": 2227.3,
+        "p99": 2651.6,
+        "mean": 1317.6
+      },
+      "queue_wait_ms": {
+        "p50": 894.1,
+        "p95": 1662.0,
+        "p99": 2200.2,
+        "mean": 968.4
+      },
+      "processing_ms": {
+        "p50": 316.6,
+        "p95": 618.5,
+        "p99": 970.2,
+        "mean": 349.2
+      },
+      "api": {
+        "GET /jobs/{id}": {
+          "requests": 9158,
+          "failures": 0,
+          "p50_ms": 15.0,
+          "p95_ms": 64.0
+        },
+        "POST /jobs": {
+          "requests": 896,
+          "failures": 0,
+          "p50_ms": 46.0,
+          "p95_ms": 140.0
+        }
+      },
+      "usage_midrun": {
+        "worker_cpu_percent": 497.1,
+        "workers_mem": [
+          "287.5MiB",
+          "286.8MiB",
+          "278.3MiB",
+          "273.7MiB"
+        ],
+        "api_cpu_percent": 67.38
+      },
+      "host_swapped_out_mb": 0.0,
+      "host_swapped_in_mb": 12.0,
+      "valid": true
+    },
+    {
+      "label": "4w-1t-pass1",
+      "config": "4w-1t",
+      "pass": 1,
+      "workers": 4,
+      "torch_threads": 1,
+      "throughput_jobs_per_s": 12.23,
+      "jobs_in_window": 733,
+      "not_succeeded": 0,
+      "end_to_end_ms": {
+        "p50": 1182.6,
+        "p95": 1582.0,
+        "p99": 1744.4,
+        "mean": 1200.5
+      },
+      "queue_wait_ms": {
+        "p50": 857.7,
+        "p95": 1179.2,
+        "p99": 1355.7,
+        "mean": 879.1
+      },
+      "processing_ms": {
+        "p50": 304.5,
+        "p95": 449.1,
+        "p99": 595.6,
+        "mean": 321.4
+      },
+      "api": {
+        "GET /jobs/{id}": {
+          "requests": 9177,
+          "failures": 0,
+          "p50_ms": 13.0,
+          "p95_ms": 67.0
+        },
+        "POST /jobs": {
+          "requests": 954,
+          "failures": 0,
+          "p50_ms": 41.0,
+          "p95_ms": 170.0
+        }
+      },
+      "usage_midrun": {
+        "worker_cpu_percent": 384.6,
+        "workers_mem": [
+          "277.5MiB",
+          "282.1MiB",
+          "274.5MiB",
+          "329.6MiB"
+        ],
+        "api_cpu_percent": 75.87
+      },
+      "host_swapped_out_mb": 0.0,
+      "host_swapped_in_mb": 45.7,
+      "valid": true
+    },
+    {
+      "label": "4w-1t-pass2",
+      "config": "4w-1t",
+      "pass": 2,
+      "workers": 4,
+      "torch_threads": 1,
+      "throughput_jobs_per_s": 12.58,
+      "jobs_in_window": 756,
+      "not_succeeded": 0,
+      "end_to_end_ms": {
+        "p50": 1114.6,
+        "p95": 1654.8,
+        "p99": 1865.0,
+        "mean": 1161.7
+      },
+      "queue_wait_ms": {
+        "p50": 818.2,
+        "p95": 1255.8,
+        "p99": 1434.6,
+        "mean": 851.4
+      },
+      "processing_ms": {
+        "p50": 293.6,
+        "p95": 453.0,
+        "p99": 599.1,
+        "mean": 310.4
+      },
+      "api": {
+        "GET /jobs/{id}": {
+          "requests": 9177,
+          "failures": 0,
+          "p50_ms": 14.0,
+          "p95_ms": 64.0
+        },
+        "POST /jobs": {
+          "requests": 968,
+          "failures": 0,
+          "p50_ms": 43.0,
+          "p95_ms": 160.0
+        }
+      },
+      "usage_midrun": {
+        "worker_cpu_percent": 391.7,
+        "workers_mem": [
+          "283.1MiB",
+          "283.3MiB",
+          "276MiB",
+          "281.1MiB"
+        ],
+        "api_cpu_percent": 71.24
+      },
+      "host_swapped_out_mb": 0.0,
+      "host_swapped_in_mb": 7.5,
+      "valid": true
+    },
+    {
+      "label": "4w-2t-pass2",
+      "config": "4w-2t",
+      "pass": 2,
+      "workers": 4,
+      "torch_threads": 2,
+      "throughput_jobs_per_s": 12.0,
+      "jobs_in_window": 718,
+      "not_succeeded": 0,
+      "end_to_end_ms": {
+        "p50": 1151.9,
+        "p95": 1975.3,
+        "p99": 2201.4,
+        "mean": 1225.9
+      },
+      "queue_wait_ms": {
+        "p50": 843.6,
+        "p95": 1562.4,
+        "p99": 1823.6,
+        "mean": 900.4
+      },
+      "processing_ms": {
+        "p50": 302.5,
+        "p95": 547.0,
+        "p99": 785.7,
+        "mean": 325.6
+      },
+      "api": {
+        "GET /jobs/{id}": {
+          "requests": 9249,
+          "failures": 0,
+          "p50_ms": 14.0,
+          "p95_ms": 62.0
+        },
+        "POST /jobs": {
+          "requests": 913,
+          "failures": 0,
+          "p50_ms": 45.0,
+          "p95_ms": 140.0
+        }
+      },
+      "usage_midrun": {
+        "worker_cpu_percent": 516.5,
+        "workers_mem": [
+          "287.4MiB",
+          "286.7MiB",
+          "278.8MiB",
+          "326.8MiB"
+        ],
+        "api_cpu_percent": 64.79
+      },
+      "host_swapped_out_mb": 0.0,
+      "host_swapped_in_mb": 7.8,
+      "valid": true
+    },
+    {
+      "label": "4w-8t-pass2",
+      "config": "4w-8t",
+      "pass": 2,
+      "workers": 4,
+      "torch_threads": 8,
+      "throughput_jobs_per_s": 4.38,
+      "jobs_in_window": 262,
+      "not_succeeded": 0,
+      "end_to_end_ms": {
+        "p50": 3409.9,
+        "p95": 4194.6,
+        "p99": 4365.0,
+        "mean": 3548.7
+      },
+      "queue_wait_ms": {
+        "p50": 2529.3,
+        "p95": 3253.3,
+        "p99": 3435.2,
+        "mean": 2641.7
+      },
+      "processing_ms": {
+        "p50": 847.4,
+        "p95": 1361.4,
+        "p99": 1628.1,
+        "mean": 907.1
+      },
+      "api": {
+        "GET /jobs/{id}": {
+          "requests": 9675,
+          "failures": 0,
+          "p50_ms": 13.0,
+          "p95_ms": 53.0
+        },
+        "POST /jobs": {
+          "requests": 337,
+          "failures": 0,
+          "p50_ms": 40.0,
+          "p95_ms": 230.0
+        }
+      },
+      "usage_midrun": {
+        "worker_cpu_percent": 571.9,
+        "workers_mem": [
+          "286.9MiB",
+          "284.5MiB",
+          "279.7MiB",
+          "302.3MiB"
+        ],
+        "api_cpu_percent": 42.76
+      },
+      "host_swapped_out_mb": 0.0,
+      "host_swapped_in_mb": 21.9,
+      "valid": true
+    },
+    {
+      "label": "2w-1t-pass2",
+      "config": "2w-1t",
+      "pass": 2,
+      "workers": 2,
+      "torch_threads": 1,
+      "throughput_jobs_per_s": 8.58,
+      "jobs_in_window": 514,
+      "not_succeeded": 0,
+      "end_to_end_ms": {
+        "p50": 1762.9,
+        "p95": 2171.0,
+        "p99": 2316.7,
+        "mean": 1790.0
+      },
+      "queue_wait_ms": {
+        "p50": 1531.5,
+        "p95": 1904.0,
+        "p99": 2042.0,
+        "mean": 1559.3
+      },
+      "processing_ms": {
+        "p50": 222.0,
+        "p95": 307.0,
+        "p99": 372.0,
+        "mean": 230.7
+      },
+      "api": {
+        "GET /jobs/{id}": {
+          "requests": 9976,
+          "failures": 0,
+          "p50_ms": 11.0,
+          "p95_ms": 37.0
+        },
+        "POST /jobs": {
+          "requests": 692,
+          "failures": 0,
+          "p50_ms": 27.0,
+          "p95_ms": 69.0
+        }
+      },
+      "usage_midrun": {
+        "worker_cpu_percent": 197.6,
+        "workers_mem": [
+          "285.4MiB",
+          "285.8MiB"
+        ],
+        "api_cpu_percent": 72.23
+      },
+      "host_swapped_out_mb": 36.6,
+      "host_swapped_in_mb": 5.0,
+      "valid": true
+    },
+    {
+      "label": "2w-4t-pass2",
+      "config": "2w-4t",
+      "pass": 2,
+      "workers": 2,
+      "torch_threads": 4,
+      "throughput_jobs_per_s": 8.05,
+      "jobs_in_window": 483,
+      "not_succeeded": 0,
+      "end_to_end_ms": {
+        "p50": 1851.1,
+        "p95": 2391.2,
+        "p99": 2654.4,
+        "mean": 1908.5
+      },
+      "queue_wait_ms": {
+        "p50": 1602.1,
+        "p95": 2129.9,
+        "p99": 2431.2,
+        "mean": 1664.7
+      },
+      "processing_ms": {
+        "p50": 223.6,
+        "p95": 370.3,
+        "p99": 596.1,
+        "mean": 243.9
+      },
+      "api": {
+        "GET /jobs/{id}": {
+          "requests": 9930,
+          "failures": 0,
+          "p50_ms": 11.0,
+          "p95_ms": 37.0
+        },
+        "POST /jobs": {
+          "requests": 616,
+          "failures": 0,
+          "p50_ms": 33.0,
+          "p95_ms": 77.0
+        }
+      },
+      "usage_midrun": {
+        "worker_cpu_percent": 384.9,
+        "workers_mem": [
+          "273.1MiB",
+          "292.4MiB"
+        ],
+        "api_cpu_percent": 56.27
+      },
+      "host_swapped_out_mb": 0.0,
+      "host_swapped_in_mb": 12.0,
+      "valid": true
+    },
+    {
+      "label": "2w-8t-pass2",
+      "config": "2w-8t",
+      "pass": 2,
+      "workers": 2,
+      "torch_threads": 8,
+      "throughput_jobs_per_s": 3.92,
+      "jobs_in_window": 236,
+      "not_succeeded": 0,
+      "end_to_end_ms": {
+        "p50": 3979.5,
+        "p95": 4913.8,
+        "p99": 5221.6,
+        "mean": 4001.4
+      },
+      "queue_wait_ms": {
+        "p50": 3468.1,
+        "p95": 4263.2,
+        "p99": 4645.9,
+        "mean": 3496.4
+      },
+      "processing_ms": {
+        "p50": 466.1,
+        "p95": 765.2,
+        "p99": 877.5,
+        "mean": 505.0
+      },
+      "api": {
+        "GET /jobs/{id}": {
+          "requests": 9931,
+          "failures": 0,
+          "p50_ms": 12.0,
+          "p95_ms": 42.0
+        },
+        "POST /jobs": {
+          "requests": 313,
+          "failures": 0,
+          "p50_ms": 34.0,
+          "p95_ms": 260.0
+        }
+      },
+      "usage_midrun": {
+        "worker_cpu_percent": 449.4,
+        "workers_mem": [
+          "300.8MiB",
+          "299.8MiB"
+        ],
+        "api_cpu_percent": 53.57
+      },
+      "host_swapped_out_mb": 0.0,
+      "host_swapped_in_mb": 20.8,
+      "valid": true
+    },
+    {
+      "label": "1w-1t-pass2",
+      "config": "1w-1t",
+      "pass": 2,
+      "workers": 1,
+      "torch_threads": 1,
+      "throughput_jobs_per_s": 5.38,
+      "jobs_in_window": 324,
+      "not_succeeded": 0,
+      "end_to_end_ms": {
+        "p50": 2879.3,
+        "p95": 3177.9,
+        "p99": 3262.3,
+        "mean": 2883.3
+      },
+      "queue_wait_ms": {
+        "p50": 2699.8,
+        "p95": 2984.1,
+        "p99": 3062.3,
+        "mean": 2700.3
+      },
+      "processing_ms": {
+        "p50": 177.3,
+        "p95": 224.7,
+        "p99": 252.6,
+        "mean": 183.0
+      },
+      "api": {
+        "GET /jobs/{id}": {
+          "requests": 10042,
+          "failures": 0,
+          "p50_ms": 10.0,
+          "p95_ms": 38.0
+        },
+        "POST /jobs": {
+          "requests": 424,
+          "failures": 0,
+          "p50_ms": 20.0,
+          "p95_ms": 57.0
+        }
+      },
+      "usage_midrun": {
+        "worker_cpu_percent": 99.5,
+        "workers_mem": [
+          "287.9MiB"
+        ],
+        "api_cpu_percent": 52.74
+      },
+      "host_swapped_out_mb": 23.8,
+      "host_swapped_in_mb": 15.2,
+      "valid": true
+    },
+    {
+      "label": "1w-8t-pass2",
+      "config": "1w-8t",
+      "pass": 2,
+      "workers": 1,
+      "torch_threads": 8,
+      "throughput_jobs_per_s": 4.07,
+      "jobs_in_window": 244,
+      "not_succeeded": 0,
+      "end_to_end_ms": {
+        "p50": 3817.2,
+        "p95": 4140.0,
+        "p99": 4402.4,
+        "mean": 3833.9
+      },
+      "queue_wait_ms": {
+        "p50": 3585.2,
+        "p95": 3901.1,
+        "p99": 4143.4,
+        "mean": 3591.7
+      },
+      "processing_ms": {
+        "p50": 229.8,
+        "p95": 322.7,
+        "p99": 459.3,
+        "mean": 242.1
+      },
+      "api": {
+        "GET /jobs/{id}": {
+          "requests": 10104,
+          "failures": 0,
+          "p50_ms": 11.0,
+          "p95_ms": 36.0
+        },
+        "POST /jobs": {
+          "requests": 316,
+          "failures": 0,
+          "p50_ms": 28.0,
+          "p95_ms": 210.0
+        }
+      },
+      "usage_midrun": {
+        "worker_cpu_percent": 449.3,
+        "workers_mem": [
+          "300.8MiB"
+        ],
+        "api_cpu_percent": 53.41
+      },
+      "host_swapped_out_mb": 0.0,
+      "host_swapped_in_mb": 4.0,
+      "valid": true
+    }
+  ]
+}
