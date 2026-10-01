@@ -22,8 +22,8 @@ queue, a database, workers, failure handling and load testing.
 | 3 | Real inference with the surgiseg-ml checkpoint, masks and result links | Done |
 | 4 | Retries with backoff, timeouts, dead-letter queue, worker crash recovery | Done |
 | 5 | Structured JSON logs and a deep `/health` check | Done |
-| 6 | Locust load test with 1, 2 and 4 workers | Measured (see Load testing); waiting on CI |
-| 7 | Architecture diagram, design decisions, benchmarks | Written; waiting on CI |
+| 6 | Locust load test with 1, 2 and 4 workers | Done (see Load testing) |
+| 7 | Architecture diagram, design decisions, benchmarks | Done |
 
 The worker runs the real network: the frozen ResNet-18 U-Net from
 surgiseg-ml (run of 2026-08-03, Dice 0.9226 on Kvasir-Instrument's 118-image
